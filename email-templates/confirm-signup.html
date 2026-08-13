@@ -1,0 +1,115 @@
+<!--
+  Synopsical — "Confirm your signup" email template
+
+  This is NOT loaded by the app. It gets pasted directly into the Supabase
+  dashboard (see README section "Custom confirmation email" for exactly
+  where), which sends it whenever someone creates an account.
+
+  Written deliberately old-fashioned for email, not for a browser:
+    - every style is inline, because many email clients (Outlook especially)
+      strip out <style> blocks and @import entirely
+    - layout uses a table, not flexbox/grid, for the same reason
+    - fonts are a plain system stack (Georgia) — a custom webfont would
+      just silently fail to load in most inboxes
+  None of that is how the app itself is built; email is a much more
+  restrictive medium and this file plays by its rules on purpose.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Confirm your email</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0e0d0b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#0e0d0b;">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:440px; background-color:#161410; border:1px solid #3a342a;
+                      border-radius:10px;">
+          <tr>
+            <td style="padding:36px 32px 28px; text-align:center;">
+              <div style="font-family:Georgia,'Times New Roman',serif; font-size:19px;
+                          letter-spacing:2px; color:#c9a84c;">
+                SYNOPSICAL
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 8px; text-align:center;">
+              <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:16px;
+                        line-height:1.5; color:#f0ead8;">
+                Confirm your email address
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:8px 32px 28px; text-align:center;">
+              <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:14px;
+                        line-height:1.6; color:#8a7f6a;">
+                Click the button below to confirm {{ .Email }} and finish creating your
+                Synopsical account. This link is only valid for a little while, so it's
+                worth doing now rather than saving it for later.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 32px; text-align:center;">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml"
+                           xmlns:w="urn:schemas-microsoft-com:office:word"
+                           href="{{ .ConfirmationURL }}" style="height:44px;v-text-anchor:middle;
+                           width:220px;" arcsize="14%" fillcolor="#c9a84c" stroke="f">
+              <center style="color:#161410;font-family:Georgia,serif;font-size:14px;font-weight:bold;">
+                Confirm email address
+              </center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <a href="{{ .ConfirmationURL }}"
+                 style="display:inline-block; background-color:#c9a84c; color:#161410;
+                        font-family:Georgia,'Times New Roman',serif; font-size:14px;
+                        font-weight:bold; text-decoration:none; padding:13px 30px;
+                        border-radius:6px;">
+                Confirm email address
+              </a>
+              <!--<![endif]-->
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 32px; text-align:center;">
+              <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:12px;
+                        line-height:1.6; color:#5a5244;">
+                Button not working? Paste this into your browser:<br>
+                <a href="{{ .ConfirmationURL }}" style="color:#8a7f6a; word-break:break-all;">
+                  {{ .ConfirmationURL }}
+                </a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:20px 32px; border-top:1px solid #3a342a; text-align:center;">
+              <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:12px;
+                        color:#5a5244;">
+                If you didn't try to create a Synopsical account, you can ignore this email —
+                nothing happens until this link is clicked.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

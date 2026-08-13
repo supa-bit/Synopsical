@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>Synopsical</title>
+  <!-- Warms up the connection for the optional Google Fonts, which are
+       only actually fetched if someone picks one in Appearance settings. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Sign-in gate. Everything else stays hidden until there is a session. -->
+<div id="auth-screen" hidden>
+  <form id="auth-form" autocomplete="on">
+    <h1 class="auth-logo">SYNOPSICAL</h1>
+    <p class="auth-sub" id="auth-sub">Sign in to reach your entries.</p>
+
+    <label class="field-label" for="auth-email">Email</label>
+    <input class="input" type="email" id="auth-email" autocomplete="email" required>
+
+    <label class="field-label" for="auth-password">Password</label>
+    <div class="password-wrap">
+      <input class="input" type="password" id="auth-password"
+             autocomplete="current-password" required minlength="6">
+      <button class="password-toggle" type="button" id="auth-password-toggle"
+              aria-label="Show password" aria-pressed="false">Show</button>
+    </div>
+
+    <label class="field-label" for="auth-password-confirm" id="auth-confirm-label" hidden>
+      Confirm password
+    </label>
+    <div class="password-wrap" id="auth-confirm-wrap" hidden>
+      <input class="input" type="password" id="auth-password-confirm"
+             autocomplete="new-password" minlength="6">
+      <button class="password-toggle" type="button" id="auth-password-confirm-toggle"
+              aria-label="Show password" aria-pressed="false">Show</button>
+    </div>
+
+    <div id="auth-error" class="auth-error" role="alert" hidden></div>
+
+    <button class="btn btn-primary auth-submit" type="submit" id="auth-submit">
+      Sign in
+    </button>
+    <button class="linkish" type="button" id="auth-toggle">
+      Need an account? Create one
+    </button>
+  </form>
+</div>
+
+<!-- Shown when someone lands back here from a "confirm your email" link. -->
+<div id="verified-screen" hidden>
+  <div class="setup-card">
+    <div class="verified-mark" aria-hidden="true">✓</div>
+    <h1 class="auth-logo">SYNOPSICAL</h1>
+    <p class="auth-sub" id="verified-sub">Your email is confirmed.</p>
+    <button class="btn btn-primary auth-submit" type="button" id="verified-continue">
+      Continue
+    </button>
+  </div>
+</div>
+
+<!-- Shown when config.js has not been filled in yet. -->
+<div id="setup-screen" hidden>
+  <div class="setup-card">
+    <h1 class="auth-logo">SYNOPSICAL</h1>
+    <p>Almost there. Two things left:</p>
+    <ol class="setup-steps">
+      <li>Run <code>supabase-schema.sql</code> in your Supabase SQL Editor.</li>
+      <li>Paste your project URL and anon key into <code>config.js</code>.</li>
+    </ol>
+    <p class="setup-note">
+      Both are in your Supabase dashboard under
+      <strong>Project Settings → API</strong>. Full walkthrough in
+      <code>README.md</code>.
+    </p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header id="topbar">
+    <button class="logo" id="nav-home" type="button">
+      SYNOPSICAL<span id="stats-pill"></span>
+    </button>
+
+    <div id="search-wrap">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input id="search" type="search" placeholder="Search entries…"
+             autocomplete="off" aria-label="Search entries">
+    </div>
+
+    <button class="btn" id="btn-settings" type="button">Appearance</button>
+    <button class="btn btn-primary" id="btn-new" type="button">+ New entry</button>
+    <button class="btn btn-sm" id="btn-signout" type="button" title="Sign out">⏻</button>
+  </header>
+
+  <nav id="sidebar">
+    <div class="side-section">
+      <div class="side-label">Browse</div>
+      <button class="side-item" id="nav-all" type="button">
+        <span>All entries</span><span class="side-count" id="count-all">0</span>
+      </button>
+      <button class="side-item" id="nav-recent" type="button">
+        <span>Recently added</span>
+      </button>
+      <button class="side-item" id="nav-graph" type="button">
+        <span>Link map</span>
+      </button>
+    </div>
+
+    <div class="side-divider"></div>
+
+    <div class="side-section">
+      <div class="side-label">Categories</div>
+      <div id="cat-list"></div>
+    </div>
+
+    <div class="side-section" id="tag-section" hidden>
+      <div class="side-label">Tags</div>
+      <div id="tag-list"></div>
+    </div>
+
+    <div class="side-foot">
+      <button class="btn btn-sm" id="btn-export" type="button">Export everything</button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <div id="view"></div>
+  </main>
+</div>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<div id="modal-overlay" hidden>
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h2 class="modal-title" id="modal-title"></h2>
+    <p class="modal-body" id="modal-body"></p>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
