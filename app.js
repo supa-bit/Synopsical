@@ -1217,7 +1217,7 @@ function viewSettings() {
     const MIN = 12, MAX = 22;
     const readout = el('span', { class: 'hint', style: { marginTop: 0 }, text: `${State.settings.fontSize ?? 15}px` });
     const slider = el('input', {
-      type: 'range', min: MIN, max: MAX, step: 1,
+      type: 'range', min: MIN, max: MAX, step: 0.5,
       value: State.settings.fontSize ?? 15,
       'aria-label': 'Text size',
       style: { width: '100%', accentColor: 'var(--accent)' },
