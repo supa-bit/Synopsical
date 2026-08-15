@@ -142,7 +142,7 @@ const State = {
   user: null,
   entries: [],          // entries with their tags and link counts attached
   view: { name: 'list' },
-  settings: { theme: { ...THEME_PRESETS[0] }, fontUi: 'serif', fontBody: 'serif', customFonts: [] },
+  settings: { theme: { ...THEME_PRESETS[0] }, fontUi: 'serif', fontBody: 'serif', fontSize: 15, customFonts: [] },
   form: null,           // working draft while the editor is open
   profile: null,        // { plan: 'free' | 'paid', ... } — null until loaded, or if
                          // supabase-schema-02-profiles.sql hasn't been run yet
@@ -367,6 +367,9 @@ function applyTheme() {
   ensureGoogleFont(State.settings.fontBody);
   root.style.setProperty('--font-ui', resolveFontStack(State.settings.fontUi));
   root.style.setProperty('--font-body', resolveFontStack(State.settings.fontBody));
+  // Every font-size in style.css is in rem, so this one line scales the
+  // whole app's text — see the comment on `html` in style.css.
+  root.style.fontSize = `${State.settings.fontSize ?? 15}px`;
 }
 
 /**
@@ -1210,11 +1213,37 @@ function viewSettings() {
     ]);
   };
 
+  const fontSizeRow = () => {
+    const MIN = 12, MAX = 22;
+    const readout = el('span', { class: 'hint', style: { marginTop: 0 }, text: `${State.settings.fontSize ?? 15}px` });
+    const slider = el('input', {
+      type: 'range', min: MIN, max: MAX, step: 1,
+      value: State.settings.fontSize ?? 15,
+      'aria-label': 'Text size',
+      style: { width: '100%', accentColor: 'var(--accent)' },
+    });
+    slider.addEventListener('input', () => {
+      State.settings.fontSize = Number(slider.value);
+      readout.textContent = `${slider.value}px`;
+      applyTheme(); // live preview — no reload needed to see the new size
+    });
+    slider.addEventListener('change', async () => {
+      try { await Data.saveSettings(); } catch { /* non-fatal */ }
+    });
+    return el('div', { class: 'field' }, [
+      el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
+        el('label', { class: 'field-label', text: 'Text size' }), readout,
+      ]),
+      slider,
+    ]);
+  };
+
   panel.append(el('div', { class: 'section' }, [
     el('div', { class: 'section-label', text: 'Fonts' }),
     el('div', { class: 'form-grid' }, [
       fontRow('Interface', 'fontUi'), fontRow('Reading', 'fontBody'),
     ]),
+    fontSizeRow(),
   ]));
 
   panel.append(customFontsSection());
