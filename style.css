@@ -1,25 +1,33 @@
 /* ═══════════════════════════════════════════════════════════════════
    Synopsical — look and feel
 
-   The six theme presets swap the variables in :root, exactly as the
-   original did. Everything below is written against those variables,
-   so a theme change never needs a code change.
+   The theme presets swap the variables in :root, exactly as the original
+   did. Everything below is written against those variables, so a theme
+   change never needs a code change. Card Catalog (kraft stock, a
+   librarian's date-stamp red, sage as the second ink) is the default —
+   these :root values match it, so there's no flash of an old theme
+   before applyTheme() runs on load.
+
+   --font-mono is structural, not one of the user-editable font slots in
+   Settings — it's what call-numbers, tags and section labels are set in
+   throughout, always loaded (see index.html), the same way Georgia never
+   needed a webfont link.
    ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg0: #0e0d0b; --bg1: #161410; --bg2: #1e1b16; --bg3: #28241c; --bg4: #332e24;
-  --border: #3a342a; --border2: #4a4236;
-  --text0: #f0ead8; --text1: #c8bfa8; --text2: #8a7f6a; --text3: #5a5244;
-  --accent: #c9a84c; --accent2: #a07830; --accent-dim: #c9a84c22;
-  --teal: #5a9e8f; --teal-dim: #5a9e8f25;
-  --coral: #c46a52; --coral-dim: #c46a5225;
-  --purple: #8b7ec8; --purple-dim: #8b7ec825;
+  --bg0: #1c170f; --bg1: #241e15; --bg2: #2c251a; --bg3: #362d1f; --bg4: #423725;
+  --border: #4a4030; --border2: #5c5138;
+  --text0: #f4ecdd; --text1: #d8ccb0; --text2: #a89878; --text3: #7c7360;
+  --accent: #a8432f; --accent2: #8a3423; --accent-dim: #a8432f22;
+  --teal: #5c7a52; --teal-dim: #5c7a5225;
+  --coral: #7a2e1f; --coral-dim: #7a2e1f25;
+  --purple: #5a6b8c; --purple-dim: #5a6b8c25;
 
-  --font-ui: Georgia, 'Iowan Old Style', serif;
-  --font-body: Georgia, 'Iowan Old Style', serif;
-  --font-mono: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  --font-ui: 'Work Sans', 'Segoe UI', -apple-system, sans-serif;
+  --font-body: 'Alegreya', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
 
-  --radius: 6px; --radius-lg: 10px;
+  --radius: 4px; --radius-lg: 8px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -100,9 +108,15 @@ code {
 }
 
 #topbar {
+  position: relative;
   grid-column: 1 / -1; background: var(--bg1);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 12px; padding: 0 18px;
+}
+.topbar-notch {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--bg1); border: 1.4px solid var(--border);
 }
 .logo {
   font-family: var(--font-body); font-size: 1.067rem; color: var(--accent);
@@ -131,7 +145,7 @@ code {
 }
 .side-section { padding: 14px 12px 6px; }
 .side-label {
-  font-size: 0.667rem; color: var(--text3); letter-spacing: 0.14em;
+  font-family: var(--font-mono); font-size: 0.667rem; color: var(--text3); letter-spacing: 0.1em;
   text-transform: uppercase; margin-bottom: 8px;
 }
 .side-item {
@@ -142,7 +156,7 @@ code {
 }
 .side-item:hover { background: var(--bg2); color: var(--text0); }
 .side-item.active { background: var(--accent-dim); border-color: var(--accent2); color: var(--accent); }
-.side-count { font-size: 0.733rem; color: var(--text3); background: var(--bg3); padding: 1px 7px; border-radius: 10px; }
+.side-count { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); background: var(--bg3); padding: 1px 7px; border-radius: 10px; }
 .side-divider { height: 1px; background: var(--border); margin: 8px 12px; }
 .side-foot { margin-top: auto; padding: 12px; }
 .side-foot .btn { width: 100%; }
@@ -154,7 +168,7 @@ code {
 
 .page-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .page-title { font-family: var(--font-body); font-size: 1.4rem; font-weight: 400; color: var(--text0); }
-.page-sub { font-size: 0.867rem; color: var(--text3); }
+.page-sub { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text3); }
 
 /* ── Buttons ────────────────────────────────────────────────────── */
 .btn {
@@ -187,26 +201,42 @@ code {
   border-radius: var(--radius-lg); padding: 14px; margin-bottom: 9px;
   cursor: pointer; width: 100%; text-align: left;
   display: flex; gap: 14px; align-items: flex-start;
-  transition: border-color 0.15s;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-.entry-card:hover { border-color: var(--border2); }
+/* A cheap, CSS-only lift — not the cursor-tracked 3D tilt from the design
+   pass. That's a fine trick for three cards in a pitch deck; across a list
+   of a few hundred entries a mousemove listener per row and a constant
+   tilt-on-hover would cost real performance and, more to the point, get
+   annoying fast when you're just scanning down a list. Depth without the
+   theatrics here — see categoryStamp() in app.js for where the fuller
+   treatment actually landed instead. */
+.entry-card:hover {
+  border-color: var(--border2); transform: translateY(-2px);
+  box-shadow: 0 10px 22px -12px rgba(0,0,0,0.5);
+}
 .entry-card-body { flex: 1; min-width: 0; }
 .entry-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.entry-card-title { font-family: var(--font-body); font-size: 1.067rem; color: var(--text0); }
+.entry-card-title { font-family: var(--font-body); font-weight: 800; font-size: 1.2rem; color: var(--text0); }
 .pill {
-  font-size: 0.733rem; color: var(--text3); background: var(--bg3);
-  padding: 2px 9px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--text2); background: none;
+  padding: 0 0 1px; border-bottom: 1px solid var(--border2);
+  border-radius: 0; white-space: nowrap; flex-shrink: 0;
 }
 .entry-card-summary {
   font-size: 0.867rem; color: var(--text2); margin-top: 5px; line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .entry-card-foot { display: flex; align-items: center; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
+/* Tags read as typed words with a rule under them, not filled badges —
+   see the note on .tag-pill's old "-dim" background in the design
+   writeup this replaced. */
 .tag-pill {
-  font-size: 0.733rem; color: var(--teal); background: var(--teal-dim);
-  border: 1px solid #5a9e8f44; padding: 1px 8px; border-radius: 10px;
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--teal);
+  background: none; border: 0; border-bottom: 1px solid var(--teal);
+  padding: 0 1px 1px;
 }
-.link-count { font-size: 0.733rem; color: var(--text3); }
+.link-count { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); }
 
 /* ── Detail ─────────────────────────────────────────────────────── */
 .back-link {
@@ -215,23 +245,35 @@ code {
   font-family: var(--font-ui);
 }
 .back-link:hover { color: var(--text1); }
-.detail-hero { display: flex; gap: 22px; align-items: flex-start; margin-bottom: 22px; }
-.detail-title { font-family: var(--font-body); font-size: 1.8rem; font-weight: 400; color: var(--text0); line-height: 1.25; margin-bottom: 8px; }
-.detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.8rem; color: var(--text3); }
-.meta-cat { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent2); padding: 2px 10px; border-radius: 10px; }
+.detail-hero { display: flex; gap: 22px; align-items: flex-start; margin-bottom: 22px; flex-wrap: wrap; }
+.detail-title { font-family: var(--font-body); font-size: clamp(1.9rem, 4vw, 2.7rem); font-weight: 900; color: var(--text0); line-height: 0.98; margin-bottom: 10px; letter-spacing: -0.01em; }
+.detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 0.73rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text3); }
+/* The one circular badge on the page — see categoryStamp() in app.js.
+   Sized well below faceplate-lg (112px) on purpose, so it reads as the
+   category's own small mark rather than competing with the entry's
+   faceplate for the same "circular icon" role. */
+.detail-stamp { width: 64px; height: 64px; flex-shrink: 0; }
+.detail-stamp svg { width: 100%; height: 100%; display: block; }
 .actions { display: flex; gap: 9px; margin-bottom: 26px; flex-wrap: wrap; }
 
 .section { margin-bottom: 26px; }
 .section-label {
-  font-size: 0.667rem; color: var(--text3); letter-spacing: 0.14em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: 0.667rem; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase;
   margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
 }
 .body-text {
   font-family: var(--font-body); font-size: 1.033rem; color: var(--text1);
   line-height: 1.78; white-space: pre-wrap; word-wrap: break-word;
 }
+/* The illuminated-capital treatment reference books use to mark "an entry
+   starts here" — applied to exactly one block per page (see viewDetail()),
+   never every .body-text, so it stays a single moment, not a repeated tic. */
+.body-text-lead::first-letter {
+  font-family: var(--font-body); font-weight: 900; font-size: 3.2em; line-height: 0.75;
+  float: left; padding: 4px 8px 0 0; color: var(--accent);
+}
 .field-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.867rem; }
-.field-name { color: var(--text3); min-width: 150px; flex-shrink: 0; }
+.field-name { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--text3); min-width: 150px; flex-shrink: 0; padding-top: 0.1rem; }
 .field-val { color: var(--text1); word-break: break-word; }
 .tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -254,7 +296,7 @@ code {
 /* ── Forms ──────────────────────────────────────────────────────── */
 .field { margin-bottom: 16px; }
 .field-label {
-  font-size: 0.733rem; color: var(--text3); letter-spacing: 0.1em;
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); letter-spacing: 0.08em;
   text-transform: uppercase; margin-bottom: 5px; display: block;
 }
 .input, .textarea, .select {
@@ -266,7 +308,7 @@ code {
 .textarea { resize: vertical; min-height: 130px; line-height: 1.65; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
-.hint { font-size: 0.8rem; color: var(--text3); margin-top: 5px; }
+.hint { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text3); margin-top: 5px; }
 .form-actions { display: flex; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
 
 /* Custom fields */
@@ -293,8 +335,9 @@ code {
 }
 .tags-input:focus-within { border-color: var(--accent); }
 .tag-chip {
-  font-size: 0.8rem; color: var(--teal); background: var(--teal-dim);
-  border: 1px solid #5a9e8f44; padding: 2px 6px 2px 10px; border-radius: 10px;
+  font-family: var(--font-mono); font-size: 0.75rem; color: var(--teal);
+  background: none; border: 0; border-bottom: 1px solid var(--teal);
+  padding: 1px 2px 3px 0; border-radius: 0;
   display: flex; align-items: center; gap: 5px;
 }
 .chip-x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 0.933rem; line-height: 1; padding: 0 2px; opacity: 0.7; }
@@ -316,8 +359,9 @@ code {
 .link-option:hover, .link-option:focus { background: var(--bg3); }
 .linked-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .linked-chip {
-  font-size: 0.8rem; color: var(--purple); background: var(--purple-dim);
-  border: 1px solid #8b7ec844; padding: 2px 6px 2px 10px; border-radius: 10px;
+  font-family: var(--font-mono); font-size: 0.75rem; color: var(--purple);
+  background: none; border: 0; border-bottom: 1px solid var(--purple);
+  padding: 1px 2px 3px 0; border-radius: 0;
   display: flex; align-items: center; gap: 5px;
 }
 
@@ -332,7 +376,7 @@ code {
 .fp-row-main { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .fp-controls { display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 220px; }
 .fp-row { display: flex; align-items: center; gap: 9px; }
-.fp-label { font-size: 0.733rem; color: var(--text3); width: 78px; flex-shrink: 0; }
+.fp-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); width: 78px; flex-shrink: 0; }
 .fp-input {
   background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 6px 10px; color: var(--text0); font-size: 0.867rem; outline: none; flex: 1; min-width: 0;

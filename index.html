@@ -9,6 +9,11 @@
        only actually fetched if someone picks one in Appearance settings. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- JetBrains Mono is structural, not optional — it's what --font-mono
+       resolves to everywhere (tags, call-numbers, section labels), so
+       unlike the fonts above this one always loads, the same way Georgia
+       never needed a webfont link. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -82,6 +87,9 @@
 
 <div id="app" hidden>
   <header id="topbar">
+    <!-- The one curve on the whole shell: the reinforcement ring a card
+         catalog's own drawer-rod punch hole would have. -->
+    <div class="topbar-notch" aria-hidden="true"></div>
     <button class="logo" id="nav-home" type="button">
       SYNOPSICAL<span id="stats-pill"></span>
     </button>

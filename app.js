@@ -78,6 +78,13 @@ const THEME_KEYS = [
 ];
 
 const THEME_PRESETS = [
+  // Default as of the "Card Catalog" redesign — kraft card-stock ground,
+  // a librarian's date-stamp red as the primary ink, sage as the second.
+  // Kept in the same THEME_KEYS shape as every other preset (see below)
+  // so the existing custom-color editor in Settings works on it unchanged.
+  { name: 'Card Catalog', bg0:'#1c170f', bg1:'#241e15', bg2:'#2c251a', bg3:'#362d1f', bg4:'#423725',
+    border:'#4a4030', border2:'#5c5138', text0:'#f4ecdd', text1:'#d8ccb0', text2:'#a89878',
+    text3:'#7c7360', accent:'#a8432f', accent2:'#8a3423', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c' },
   { name: 'Ember', bg0:'#0e0d0b', bg1:'#161410', bg2:'#1e1b16', bg3:'#28241c', bg4:'#332e24',
     border:'#3a342a', border2:'#4a4236', text0:'#f0ead8', text1:'#c8bfa8', text2:'#8a7f6a',
     text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8' },
@@ -105,6 +112,10 @@ const FONT_STACKS = {
   whimsical: "'Fredoka', 'Comic Sans MS', sans-serif",
   lab: "'IBM Plex Mono', 'Cascadia Code', Consolas, monospace",
   commanding: "'Space Grotesk', 'Segoe UI', sans-serif",
+  // The Card Catalog default's pairing: a literary book-serif for titles and
+  // reading text, a quiet workhorse sans for UI chrome.
+  alegreya: "'Alegreya', Georgia, serif",
+  worksans: "'Work Sans', 'Segoe UI', -apple-system, sans-serif",
 };
 
 // The three new options above are hosted on Google Fonts — free to use
@@ -115,6 +126,8 @@ const GOOGLE_FONTS = {
   whimsical: 'Fredoka:wght@400;600',
   lab: 'IBM+Plex+Mono:wght@400;500;600',
   commanding: 'Space+Grotesk:wght@400;600;700',
+  alegreya: 'Alegreya:wght@400;700;900',
+  worksans: 'Work+Sans:wght@400;600',
 };
 
 const _loadedFonts = new Set();
@@ -142,7 +155,7 @@ const State = {
   user: null,
   entries: [],          // entries with their tags and link counts attached
   view: { name: 'list' },
-  settings: { theme: { ...THEME_PRESETS[0] }, fontUi: 'serif', fontBody: 'serif', fontSize: 15, customFonts: [] },
+  settings: { theme: { ...THEME_PRESETS[0] }, fontUi: 'worksans', fontBody: 'alegreya', fontSize: 15, customFonts: [] },
   form: null,           // working draft while the editor is open
   profile: null,        // { plan: 'free' | 'paid', ... } — null until loaded, or if
                          // supabase-schema-02-profiles.sql hasn't been run yet
@@ -427,6 +440,80 @@ function faceplate(entry, size = 'sm') {
   return node;
 }
 
+/* ── Category stamp ────────────────────────────────────────────────
+   A circular ink-stamp badge for an entry's category, used once — on the
+   detail page only, replacing the old flat pill there. Deliberately not
+   reused on every list card: the faceplate already owns that "circular
+   badge" role in a dense list, and a second circle per row would compete
+   with it rather than add anything.
+
+   Every node here is built with createElementNS + textContent, never a
+   template string. Category names are free text a user typed, and go
+   inside an SVG <textPath> — string-built SVG would reopen exactly the
+   injection path the top-of-file comment on this app already warns about
+   for entry titles. This keeps the same guarantee for categories.
+
+   The curved label follows a top-only semicircle (not a full circle) on
+   purpose: an earlier version used a closed ring, and long category names
+   wrapped past the top and rendered upside-down along the bottom half —
+   confirmed with a throwaway test page before writing this, not assumed. */
+function categoryStamp(category) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 60 60');
+  svg.setAttribute('aria-hidden', 'true');
+
+  // Stable per-category choice between the theme's two "ink" colors, so
+  // the same category always lands on the same one across a visit.
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
+  const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--teal';
+  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#a8432f';
+
+  const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
+  const defs = document.createElementNS(NS, 'defs');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('id', ringId);
+  // Top semicircle only (sweep-flag 1) — see comment above.
+  path.setAttribute('d', 'M6,30 A24,24 0 1,1 54,30');
+  path.setAttribute('fill', 'none');
+  defs.append(path);
+
+  const ring2 = document.createElementNS(NS, 'circle');
+  ring2.setAttribute('cx', '30'); ring2.setAttribute('cy', '30'); ring2.setAttribute('r', '18.5');
+  ring2.setAttribute('fill', 'none'); ring2.setAttribute('stroke', ink);
+  ring2.setAttribute('stroke-width', '0.8'); ring2.setAttribute('opacity', '0.5');
+
+  // Truncated to a length verified (via getStartPositionOfChar on the real
+  // path) to stay inside the top arc at this font-size/letter-spacing —
+  // longer than this and characters run off the end of the path.
+  const label = category.length > 8 ? category.slice(0, 8).toUpperCase() + '…' : category.toUpperCase();
+  const curvedText = document.createElementNS(NS, 'text');
+  curvedText.setAttribute('font-family', 'var(--font-mono)');
+  curvedText.setAttribute('font-size', '6');
+  curvedText.setAttribute('fill', ink);
+  curvedText.setAttribute('letter-spacing', '2');
+  const textPath = document.createElementNS(NS, 'textPath');
+  textPath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${ringId}`);
+  textPath.setAttribute('href', `#${ringId}`);
+  textPath.setAttribute('startOffset', '2');
+  textPath.textContent = label; // textContent — never markup — see comment above
+  curvedText.append(textPath);
+
+  const abbrev = (category.match(/[A-Za-z]/g) || []).slice(0, 3).join('').toUpperCase() || '•';
+  const centerText = document.createElementNS(NS, 'text');
+  centerText.setAttribute('x', '30'); centerText.setAttribute('y', '35');
+  centerText.setAttribute('text-anchor', 'middle');
+  centerText.setAttribute('font-family', 'var(--font-body)');
+  centerText.setAttribute('font-weight', '700');
+  centerText.setAttribute('font-size', '12');
+  centerText.setAttribute('fill', ink);
+  centerText.textContent = abbrev;
+
+  svg.append(defs, ring2, curvedText, centerText);
+  return el('div', { class: 'detail-stamp' }, [svg]);
+}
+
 /* ── Navigation ────────────────────────────────────────────────── */
 
 function go(view) {
@@ -591,7 +678,6 @@ async function viewDetail(id) {
     el('div', { style: { flex: '1', minWidth: '0' } }, [
       el('h1', { class: 'detail-title', text: entry.title }),
       el('div', { class: 'detail-meta' }, [
-        entry.category ? el('span', { class: 'meta-cat', text: entry.category }) : null,
         entry.subcategory ? el('span', { text: entry.subcategory }) : null,
         el('span', {
           text: 'Added ' + new Date(entry.created_at).toLocaleDateString(undefined, {
@@ -600,6 +686,9 @@ async function viewDetail(id) {
         }),
       ]),
     ]),
+    // The category's own badge, moved out of the small meta text row and
+    // given the one circular "stamp" moment on the page — see categoryStamp().
+    entry.category ? categoryStamp(entry.category) : null,
   ]));
 
   panel.append(el('div', { class: 'actions' }, [
@@ -631,8 +720,11 @@ async function viewDetail(id) {
   const section = (label, content) =>
     el('div', { class: 'section' }, [el('div', { class: 'section-label', text: label }), content]);
 
-  if (entry.summary) panel.append(section('Summary', el('div', { class: 'body-text', text: entry.summary })));
-  if (entry.body) panel.append(section('Notes', el('div', { class: 'body-text', text: entry.body })));
+  // The illuminated-capital treatment (see .body-text-lead in style.css)
+  // goes on whichever block reads first — Summary if there is one, else
+  // Notes — never both, so the page gets one drop cap, not a stack of them.
+  if (entry.summary) panel.append(section('Summary', el('div', { class: 'body-text body-text-lead', text: entry.summary })));
+  if (entry.body) panel.append(section('Notes', el('div', { class: 'body-text' + (entry.summary ? '' : ' body-text-lead'), text: entry.body })));
 
   if (fields.length) {
     const wrap = el('div');
@@ -1187,6 +1279,8 @@ function viewSettings() {
   const fontRow = (labelText, key) => {
     const select = el('select', { class: 'select' });
     for (const [value, label] of [
+      ['alegreya', 'Alegreya (Card Catalog default)'],
+      ['worksans', 'Work Sans (Card Catalog default)'],
       ['serif', 'Serif (Georgia)'],
       ['sans', 'Sans-serif'],
       ['mono', 'Monospace'],
