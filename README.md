@@ -9,13 +9,13 @@ with the data moved out of the browser and into a real database.
 | File | What it is |
 |---|---|
 | `index.html` | The page |
-| `style.css` | Look and feel — six themes built in |
+| `style.css` | Look and feel — seven themes built in |
 | `app.js` | Everything the app does |
 | `config.js` | **You edit this** — your two Supabase keys go here |
 | `supabase-schema.sql` | Database setup — run once |
 | `supabase-schema-02-profiles.sql` | Adds the multi-user/plan foundation — run once, after the first |
 | `CNAME` | Tells GitHub Pages to serve this site at synopsical.com |
-| `email-templates/confirm-signup.html` | Paste into Supabase's email settings — never served by the app itself |
+| `email-templates/*.html` | Paste into Supabase's email settings — never served by the app itself |
 
 ---
 
@@ -76,6 +76,48 @@ account.
 By default Supabase emails you a link to click before a new account can sign
 in. For a private app that is an extra step you may not want. Turn it off
 under **Authentication → Providers → Email → Confirm email**.
+
+### Optional: send email as you@synopsical.com instead of Supabase
+
+By default every auth email (confirm-signup, reset-password) is sent by
+Supabase's own shared address, not synopsical.com. Two separate things
+control what a recipient actually sees, and both need to be done — doing
+only one leaves the emails half-branded:
+
+1. **The template (what the email says)** — already written for you in
+   `email-templates/`. In the Supabase dashboard, go to
+   **Authentication → Email Templates**, and for each of **Confirm signup**
+   and **Reset password**, paste in the matching file's contents (open the
+   `.html` file, copy everything, paste into that template's body field,
+   save). This is why the emails look like the rest of the site instead of
+   Supabase's own default template — it does nothing about the sender.
+
+2. **The sender (who it's actually from)** — controlled by
+   **Project Settings → Auth → SMTP Settings** (labeled "Custom SMTP" in
+   some Supabase versions). Supabase's built-in mailer can only ever send
+   from its own address; getting `noreply@synopsical.com` (or whatever
+   address you want) in the "From" field requires connecting your own
+   SMTP credentials from an actual email-sending service — Supabase
+   doesn't send email on your domain's behalf without one. If you don't
+   already have an email-sending account, a transactional-email provider
+   (not a regular inbox) is the normal way to do this — Resend, Postmark,
+   and Amazon SES are common choices with free tiers. Whichever you pick,
+   the flow is the same shape:
+   - Create an account with the provider, add `synopsical.com` as a
+     sending domain.
+   - The provider gives you DNS records (usually an SPF `TXT` record and
+     one or more DKIM `CNAME`/`TXT` records) — add those at your domain
+     registrar. This step proves to receiving mail servers that the
+     provider is allowed to send as your domain, and is what keeps these
+     emails out of spam folders.
+   - Once the provider shows the domain as verified, it gives you SMTP
+     host/port/username/password — enter those in Supabase's SMTP
+     Settings, along with the sender address and name you want shown
+     (e.g. `no-reply@synopsical.com`, "Synopsical").
+   - Send yourself a test reset-password email afterward to confirm both
+     the sender address and the new template actually show up correctly —
+     Supabase's SMTP test button (if present) only confirms the
+     connection works, not that a real send looks right.
 
 ## Step 4 — Open it
 
