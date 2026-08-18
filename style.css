@@ -109,12 +109,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 22px 28px; border-bottom: 1px solid var(--border);
 }
-/* .topbar-notch is filled to match a solid backdrop (see #topbar) so it
-   reads as a punched hole — but the homepage header has no solid backdrop
-   of its own, on purpose, so the glow can show through it. A filled circle
-   there just floats as a mismatched dot instead of blending in, so this
-   context gets an outline-only ring, which reads fine over any backdrop. */
-.home-header .topbar-notch { background: none; }
 .home-wordmark { font-family: var(--font-body); font-weight: 700; font-size: 1.267rem; letter-spacing: 0.08em; color: var(--text0); }
 .home-signin-link {
   font-family: var(--font-mono); font-size: 0.867rem; color: var(--text2);
