@@ -79,12 +79,15 @@ const THEME_KEYS = [
 
 const THEME_PRESETS = [
   // Default as of the "Card Catalog" redesign — kraft card-stock ground,
-  // a librarian's date-stamp red as the primary ink, sage as the second.
+  // blue-black ink-stamp ink as the primary ink, sage as the second.
+  // (An earlier rust-red primary got replaced after direct feedback that
+  // it was, verbatim, "horrendous" — indigo keeps the same "real stamp
+  // ink" logic without the warmth that was the actual problem.)
   // Kept in the same THEME_KEYS shape as every other preset (see below)
   // so the existing custom-color editor in Settings works on it unchanged.
   { name: 'Card Catalog', bg0:'#1c170f', bg1:'#241e15', bg2:'#2c251a', bg3:'#362d1f', bg4:'#423725',
     border:'#4a4030', border2:'#5c5138', text0:'#f4ecdd', text1:'#d8ccb0', text2:'#a89878',
-    text3:'#7c7360', accent:'#a8432f', accent2:'#8a3423', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c' },
+    text3:'#7c7360', accent:'#35507a', accent2:'#253a5c', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c' },
   { name: 'Ember', bg0:'#0e0d0b', bg1:'#161410', bg2:'#1e1b16', bg3:'#28241c', bg4:'#332e24',
     border:'#3a342a', border2:'#4a4236', text0:'#f0ead8', text1:'#c8bfa8', text2:'#8a7f6a',
     text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8' },
@@ -468,7 +471,7 @@ function categoryStamp(category) {
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
   const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--teal';
-  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#a8432f';
+  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#35507a';
 
   const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
   const defs = document.createElementNS(NS, 'defs');

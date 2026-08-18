@@ -3,10 +3,10 @@
 
    The theme presets swap the variables in :root, exactly as the original
    did. Everything below is written against those variables, so a theme
-   change never needs a code change. Card Catalog (kraft stock, a
-   librarian's date-stamp red, sage as the second ink) is the default —
-   these :root values match it, so there's no flash of an old theme
-   before applyTheme() runs on load.
+   change never needs a code change. Card Catalog (kraft stock, blue-black
+   ink-stamp ink, sage as the second ink) is the default — these :root
+   values match it, so there's no flash of an old theme before
+   applyTheme() runs on load.
 
    --font-mono is structural, not one of the user-editable font slots in
    Settings — it's what call-numbers, tags and section labels are set in
@@ -18,7 +18,7 @@
   --bg0: #1c170f; --bg1: #241e15; --bg2: #2c251a; --bg3: #362d1f; --bg4: #423725;
   --border: #4a4030; --border2: #5c5138;
   --text0: #f4ecdd; --text1: #d8ccb0; --text2: #a89878; --text3: #7c7360;
-  --accent: #a8432f; --accent2: #8a3423; --accent-dim: #a8432f22;
+  --accent: #35507a; --accent2: #253a5c; --accent-dim: #35507a22;
   --teal: #5c7a52; --teal-dim: #5c7a5225;
   --coral: #7a2e1f; --coral-dim: #7a2e1f25;
   --purple: #5a6b8c; --purple-dim: #5a6b8c25;
