@@ -79,26 +79,27 @@ const THEME_KEYS = [
 
 // accent_ink is the text color .btn-primary sits on top of its accent fill
 // with — a separate field, not derived from bg0/text0 at paint time, because
-// which one reads legibly depends on whether THIS preset's accent is bright
-// or dark, and that varies per preset. Every preset before Card Catalog
-// happens to have a bright/light accent, so bg0 (dark text) has always been
-// the right choice for them — copied in explicitly below so nothing about
-// their appearance changes. Card Catalog's accent is dark, so it needs
-// text0 (light text) instead; the old code hardcoded var(--bg0) in
-// style.css and never noticed, because no earlier preset would have caught
-// the mistake.
+// which one reads legibly depends on whether a given preset's accent is
+// bright or dark, and a dark-accent preset (an earlier Card Catalog
+// iteration had one) needs the opposite of what every preset here needs.
+// All seven happen to use their own bg0 right now, since all seven accents
+// are currently bright/light — but this field exists, rather than every
+// preset just hardcoding bg0 in style.css, specifically so a future dark
+// accent doesn't quietly repeat that bug.
 const THEME_PRESETS = [
   // Default as of the "Card Catalog" redesign — kraft card-stock ground,
-  // a royal ink-blue as the primary ink, sage as the second.
-  // (Went through two earlier primaries on direct feedback: a rust red
-  // called "horrendous", then a "denim" that read as too washed-out — this
-  // is deeper and more saturated than both, still an ink, not a dye.)
+  // sky blue as the primary ink, sage as the second.
+  // (Third primary color on direct feedback, picked from a side-by-side of
+  // five candidates: a rust red called "horrendous", a "denim" that read
+  // as too washed-out, then a choice between deep-royal and pastel-sky for
+  // legibility — sky blue won, reads clearly as text against the dark
+  // ground, which was the actual ask.)
   // Kept in the same THEME_KEYS shape as every other preset (see below)
   // so the existing custom-color editor in Settings works on it unchanged.
   { name: 'Card Catalog', bg0:'#1c170f', bg1:'#241e15', bg2:'#2c251a', bg3:'#362d1f', bg4:'#423725',
     border:'#4a4030', border2:'#5c5138', text0:'#f4ecdd', text1:'#d8ccb0', text2:'#a89878',
-    text3:'#7c7360', accent:'#2c4f8c', accent2:'#1e3763', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c',
-    accent_ink:'#f4ecdd' },
+    text3:'#7c7360', accent:'#6f9bd1', accent2:'#4f7ab8', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c',
+    accent_ink:'#1c170f' },
   { name: 'Ember', bg0:'#0e0d0b', bg1:'#161410', bg2:'#1e1b16', bg3:'#28241c', bg4:'#332e24',
     border:'#3a342a', border2:'#4a4236', text0:'#f0ead8', text1:'#c8bfa8', text2:'#8a7f6a',
     text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8',
@@ -488,7 +489,7 @@ function categoryStamp(category) {
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
   const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--teal';
-  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#2c4f8c';
+  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f9bd1';
 
   const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
   const defs = document.createElementNS(NS, 'defs');
