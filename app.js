@@ -74,38 +74,55 @@ function confirmDialog(title, body, confirmLabel = 'Confirm') {
 
 const THEME_KEYS = [
   'bg0','bg1','bg2','bg3','bg4','border','border2',
-  'text0','text1','text2','text3','accent','accent2','teal','coral','purple',
+  'text0','text1','text2','text3','accent','accent2','teal','coral','purple','accent_ink',
 ];
 
+// accent_ink is the text color .btn-primary sits on top of its accent fill
+// with — a separate field, not derived from bg0/text0 at paint time, because
+// which one reads legibly depends on whether THIS preset's accent is bright
+// or dark, and that varies per preset. Every preset before Card Catalog
+// happens to have a bright/light accent, so bg0 (dark text) has always been
+// the right choice for them — copied in explicitly below so nothing about
+// their appearance changes. Card Catalog's accent is dark, so it needs
+// text0 (light text) instead; the old code hardcoded var(--bg0) in
+// style.css and never noticed, because no earlier preset would have caught
+// the mistake.
 const THEME_PRESETS = [
   // Default as of the "Card Catalog" redesign — kraft card-stock ground,
-  // blue-black ink-stamp ink as the primary ink, sage as the second.
-  // (An earlier rust-red primary got replaced after direct feedback that
-  // it was, verbatim, "horrendous" — indigo keeps the same "real stamp
-  // ink" logic without the warmth that was the actual problem.)
+  // a royal ink-blue as the primary ink, sage as the second.
+  // (Went through two earlier primaries on direct feedback: a rust red
+  // called "horrendous", then a "denim" that read as too washed-out — this
+  // is deeper and more saturated than both, still an ink, not a dye.)
   // Kept in the same THEME_KEYS shape as every other preset (see below)
   // so the existing custom-color editor in Settings works on it unchanged.
   { name: 'Card Catalog', bg0:'#1c170f', bg1:'#241e15', bg2:'#2c251a', bg3:'#362d1f', bg4:'#423725',
     border:'#4a4030', border2:'#5c5138', text0:'#f4ecdd', text1:'#d8ccb0', text2:'#a89878',
-    text3:'#7c7360', accent:'#35507a', accent2:'#253a5c', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c' },
+    text3:'#7c7360', accent:'#2c4f8c', accent2:'#1e3763', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c',
+    accent_ink:'#f4ecdd' },
   { name: 'Ember', bg0:'#0e0d0b', bg1:'#161410', bg2:'#1e1b16', bg3:'#28241c', bg4:'#332e24',
     border:'#3a342a', border2:'#4a4236', text0:'#f0ead8', text1:'#c8bfa8', text2:'#8a7f6a',
-    text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8' },
+    text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8',
+    accent_ink:'#0e0d0b' },
   { name: 'Slate', bg0:'#0a0c10', bg1:'#111418', bg2:'#181d24', bg3:'#202730', bg4:'#28303c',
     border:'#2e3844', border2:'#3a4858', text0:'#dde8f4', text1:'#9fb4cc', text2:'#607080',
-    text3:'#3a4a58', accent:'#4a9ede', accent2:'#2a7ab8', teal:'#4ab8a0', coral:'#e07060', purple:'#9080d0' },
+    text3:'#3a4a58', accent:'#4a9ede', accent2:'#2a7ab8', teal:'#4ab8a0', coral:'#e07060', purple:'#9080d0',
+    accent_ink:'#0a0c10' },
   { name: 'Forest', bg0:'#090d0a', bg1:'#101510', bg2:'#161e16', bg3:'#1e281e', bg4:'#263226',
     border:'#2e3c2e', border2:'#3a4c3a', text0:'#ddeedd', text1:'#9abba0', text2:'#607060',
-    text3:'#3a4a3a', accent:'#68c080', accent2:'#449060', teal:'#50b0c8', coral:'#d08060', purple:'#a080c0' },
+    text3:'#3a4a3a', accent:'#68c080', accent2:'#449060', teal:'#50b0c8', coral:'#d08060', purple:'#a080c0',
+    accent_ink:'#090d0a' },
   { name: 'Parchment', bg0:'#f4eeda', bg1:'#ebe3ca', bg2:'#e2d7b4', bg3:'#d6c99c', bg4:'#cabb88',
     border:'#b8a469', border2:'#9a8449', text0:'#1a1208', text1:'#302010', text2:'#6a5222',
-    text3:'#8f7846', accent:'#8a4614', accent2:'#6a3004', teal:'#205838', coral:'#8a3423', purple:'#4f2a6e' },
+    text3:'#8f7846', accent:'#8a4614', accent2:'#6a3004', teal:'#205838', coral:'#8a3423', purple:'#4f2a6e',
+    accent_ink:'#f4eeda' },
   { name: 'Void', bg0:'#000000', bg1:'#080808', bg2:'#101010', bg3:'#181818', bg4:'#202020',
     border:'#282828', border2:'#383838', text0:'#ffffff', text1:'#cccccc', text2:'#888888',
-    text3:'#585858', accent:'#ffffff', accent2:'#aaaaaa', teal:'#40c0b0', coral:'#e06050', purple:'#9060e0' },
+    text3:'#585858', accent:'#ffffff', accent2:'#aaaaaa', teal:'#40c0b0', coral:'#e06050', purple:'#9060e0',
+    accent_ink:'#000000' },
   { name: 'Rose', bg0:'#0f0a0c', bg1:'#18100f', bg2:'#221516', bg3:'#2e1c1e', bg4:'#3a2428',
     border:'#4a2c30', border2:'#5e3840', text0:'#fce8ec', text1:'#d4a8b0', text2:'#885860',
-    text3:'#5a3038', accent:'#e0607a', accent2:'#b04060', teal:'#60a890', coral:'#e09060', purple:'#9868c8' },
+    text3:'#5a3038', accent:'#e0607a', accent2:'#b04060', teal:'#60a890', coral:'#e09060', purple:'#9868c8',
+    accent_ink:'#0f0a0c' },
 ];
 
 const FONT_STACKS = {
@@ -471,7 +488,7 @@ function categoryStamp(category) {
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
   const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--teal';
-  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#35507a';
+  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#2c4f8c';
 
   const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
   const defs = document.createElementNS(NS, 'defs');
