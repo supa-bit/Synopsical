@@ -110,12 +110,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
   padding: 22px 28px; border-bottom: 1px solid var(--border);
 }
 .home-wordmark { font-family: var(--font-body); font-weight: 700; font-size: 1.267rem; letter-spacing: 0.08em; color: var(--text0); }
-.home-signin-link {
+.home-nav { display: flex; align-items: center; gap: 24px; }
+.home-nav-link {
   font-family: var(--font-mono); font-size: 0.867rem; color: var(--text2);
   background: none; border: 0; border-bottom: 1px solid var(--border2);
-  padding-bottom: 2px; cursor: pointer;
+  padding-bottom: 2px; cursor: pointer; text-decoration: none;
 }
-.home-signin-link:hover { color: var(--text0); border-color: var(--text2); }
+.home-nav-link:hover { color: var(--text0); border-color: var(--text2); }
 
 .home-hero { padding: 5.07rem 0 2.67rem; }
 .home-eyebrow {
@@ -177,6 +178,36 @@ button, input, textarea, select { font: inherit; color: inherit; }
   border-top: 1px solid var(--border); padding: 22px 0 40px;
   font-family: var(--font-mono); font-size: 0.8rem; color: var(--text3);
 }
+.home-footer .home-wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.home-footer-nav { display: flex; gap: 20px; }
+.home-footer-nav a { color: var(--text3); text-decoration: none; }
+.home-footer-nav a:hover { color: var(--text1); }
+
+/* ── Pricing (prototype — see the banner in pricing.html) ─────────── */
+.pricing-banner {
+  display: flex; align-items: center; gap: 14px; margin: 8px 0 40px;
+  padding: 12px 16px; background: var(--bg1); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); font-size: 0.867rem; color: var(--text2); flex-wrap: wrap;
+}
+.pricing-banner .tag {
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: var(--radius); background: var(--accent-dim); color: var(--accent);
+}
+.pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 60px; }
+@media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; } }
+.pricing-card {
+  background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 28px 26px; display: flex; flex-direction: column; gap: 16px;
+}
+.pricing-card.featured { border-color: var(--accent2); }
+.pricing-tier-name { font-family: var(--font-body); font-weight: 800; font-size: 1.33rem; color: var(--text0); }
+.pricing-price { font-family: var(--font-body); font-weight: 900; font-size: 2.13rem; color: var(--text0); line-height: 1; }
+.pricing-price .unit { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); font-weight: 400; margin-left: 6px; }
+.pricing-list { list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; color: var(--text2); }
+.pricing-list li { padding-left: 18px; position: relative; }
+.pricing-list li::before { content: '—'; color: var(--accent); position: absolute; left: 0; }
+.pricing-card .btn { margin-top: auto; text-align: center; text-decoration: none; }
+.pricing-card .btn[aria-disabled="true"] { opacity: 0.5; cursor: default; pointer-events: none; }
 
 /* ── Sign-in and setup ──────────────────────────────────────────── */
 #auth-screen, #setup-screen {
