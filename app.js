@@ -1769,7 +1769,42 @@ function showResetScreen() {
   setPasswordVisible('reset-password-confirm', false);
 }
 
+/**
+ * Maps a pre-auth screen to the hash that should be in the address bar for
+ * it, and back. Same shape as go()/readHash() below for the signed-in app
+ * — kept as a separate pair rather than folded into those, since the two
+ * routers are only ever active at different times (before vs. after a
+ * session exists) and readHash()'s switch has no pre-auth cases at all.
+ */
+function authHashFor(mode) {
+  return mode === 'signin' ? '#/sign-in'
+    : mode === 'signup' ? '#/sign-up'
+    : mode === 'forgot' ? '#/forgot-password'
+    : '#/'; // homepage
+}
+function readAuthHash() {
+  const raw = window.location.hash.replace(/^#\/?/, '');
+  if (raw === 'sign-in') return 'signin';
+  if (raw === 'sign-up') return 'signup';
+  if (raw === 'forgot-password') return 'forgot';
+  return null; // homepage
+}
+
+/**
+ * Public entry point for switching pre-auth screens — pushes the matching
+ * hash (so the address bar actually changes, and back/forward actually
+ * works) the same way go() does for the signed-in app, then either lets
+ * the resulting hashchange do the painting or paints immediately if the
+ * hash was already right. Never call paintAuth() directly from a click
+ * handler; call this.
+ */
 function showAuth(mode = 'signin') {
+  const hash = authHashFor(mode);
+  if (window.location.hash !== hash) window.location.hash = hash;
+  else paintAuth(mode);
+}
+
+function paintAuth(mode = 'signin') {
   $('auth-screen').hidden = false;
   $('homepage').hidden = true;
   $('app').hidden = true;
@@ -1810,6 +1845,21 @@ function showAuth(mode = 'signin') {
   setPasswordVisible('auth-password-confirm', false);
 }
 
+/** Same push-then-paint pattern as showAuth() above, for going back to the
+ *  public homepage — e.g. pressing browser back from #/sign-in. */
+function showHomepage() {
+  const hash = '#/';
+  if (window.location.hash !== hash && window.location.hash !== '') window.location.hash = hash;
+  else paintHomepage();
+}
+function paintHomepage() {
+  $('homepage').hidden = false;
+  $('auth-screen').hidden = true;
+  $('verified-screen').hidden = true;
+  $('reset-screen').hidden = true;
+  $('app').hidden = true;
+}
+
 /** Shared by both password fields — flips one input between masked and plain text. */
 function setPasswordVisible(inputId, visible) {
   const input = $(inputId);
@@ -1821,6 +1871,8 @@ function setPasswordVisible(inputId, visible) {
 }
 
 function wireAuth() {
+  $('auth-logo-home').addEventListener('click', () => showHomepage());
+
   $('auth-toggle').addEventListener('click', () => {
     const mode = $('auth-form').dataset.mode;
     showAuth(mode === 'forgot' ? 'signin' : mode === 'signin' ? 'signup' : 'signin');
@@ -1951,6 +2003,14 @@ async function start(user) {
   $('verified-screen').hidden = true;
   $('app').hidden = false;
 
+  // A stale #/sign-in (etc.) from before this session existed — e.g. a
+  // bookmark made while logged out, opened again after signing in
+  // elsewhere — means nothing to the signed-in app's own router and would
+  // just sit there unexplained. readHash() would silently fall through to
+  // its 'list' default either way; this just makes the address bar match
+  // what's actually on screen.
+  if (readAuthHash()) history.replaceState(null, '', window.location.pathname);
+
   try {
     await Data.loadSettings();
     applyTheme();
@@ -2000,22 +2060,40 @@ function wireChrome() {
     if (ev.key === 'Escape' && !$('modal-overlay').hidden) $('modal-overlay').hidden = true;
   });
 
+  // Guarded on State.user because the pre-auth screens have their own
+  // hashchange listener (see wireHomepage()) — without the guard, a
+  // logged-out visitor's #/sign-in etc. would also run render() into the
+  // (hidden) #app, harmlessly wasted work at best.
   window.addEventListener('hashchange', async () => {
+    if (!State.user) return;
     State.view = readHash();
     await render();
   });
 }
 
 /**
- * The public homepage's own four exits — all of them just hide it and
- * hand off to the existing auth machinery, never touching #homepage's
- * own hidden state anywhere else (showAuth() already does that).
+ * The public homepage's own four exits — all of them just hand off to the
+ * existing auth machinery via showAuth(), which now owns updating the
+ * hash itself. Also owns the pre-auth side of hash routing: back/forward
+ * between the homepage and the sign-in/sign-up/forgot-password screens
+ * (previously neither the address bar nor the browser's back button did
+ * anything for these screens, since nothing ever touched the hash).
  */
 function wireHomepage() {
   $('home-signin').addEventListener('click', () => showAuth('signin'));
   $('home-cta-signin').addEventListener('click', () => showAuth('signin'));
   $('home-cta-start').addEventListener('click', () => showAuth('signup'));
   $('home-cta-start-2').addEventListener('click', () => showAuth('signup'));
+
+  // Guarded the opposite way from wireChrome()'s listener above — once
+  // State.user is set, the signed-in app owns hash routing entirely, and
+  // this must not fight it (e.g. by repainting the homepage over #app).
+  window.addEventListener('hashchange', () => {
+    if (State.user) return;
+    const mode = readAuthHash();
+    if (mode) paintAuth(mode);
+    else paintHomepage();
+  });
 }
 
 async function boot() {
@@ -2065,11 +2143,18 @@ async function boot() {
     return;
   }
 
+  if (data.session?.user) {
+    await start(data.session.user);
+    return;
+  }
+
   // No forced showAuth('signin') here on purpose — #homepage is already
   // the visible-by-default state in the raw HTML (see its comment in
-  // index.html), so a logged-out visitor doesn't need anything done to
-  // them at all. Only a real session gets routed straight past it.
-  if (data.session?.user) await start(data.session.user);
+  // index.html). The one thing still needed: honoring a bookmarked or
+  // refreshed #/sign-in (etc.) URL, so it opens straight to that screen
+  // instead of flashing the homepage first and jumping a moment later.
+  const mode = readAuthHash();
+  if (mode) paintAuth(mode);
 }
 
 boot();

@@ -194,6 +194,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
   font-family: var(--font-body); font-size: 1.333rem; font-weight: 400;
   color: var(--accent); letter-spacing: 0.14em; text-align: center;
 }
+/* Only the sign-in screen's wordmark is a real button (id="auth-logo-home")
+   — a "click the logo to go home" link, the way most sites work. The
+   others (verified/reset/setup screens) stay plain headings; those are
+   one-time landing points from an email link, not something worth adding
+   a way to wander off from mid-flow. */
+button.auth-logo {
+  background: none; border: 0; padding: 0; cursor: pointer; width: 100%;
+}
 .verified-mark {
   width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 50%;
   background: var(--teal-dim); border: 1px solid var(--teal); color: var(--teal);
