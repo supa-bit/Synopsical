@@ -87,19 +87,24 @@ const THEME_KEYS = [
 // preset just hardcoding bg0 in style.css, specifically so a future dark
 // accent doesn't quietly repeat that bug.
 const THEME_PRESETS = [
-  // Default as of the "Card Catalog" redesign — kraft card-stock ground,
-  // sky blue as the primary ink, sage as the second.
-  // (Third primary color on direct feedback, picked from a side-by-side of
-  // five candidates: a rust red called "horrendous", a "denim" that read
-  // as too washed-out, then a choice between deep-royal and pastel-sky for
-  // legibility — sky blue won, reads clearly as text against the dark
-  // ground, which was the actual ask.)
+  // Default as of the "Card Catalog" redesign. Ground moved off the
+  // original kraft-brown to a quiet, cool blue-black — direct feedback
+  // was that brown read as "not eye-catching" once sky blue (itself
+  // chosen from a side-by-side after a rust red called "horrendous" and
+  // a "denim" that read as too washed-out) was sitting on it. The actual
+  // fix wasn't a bolder ground, though — two saturated fields (a loud
+  // background AND a loud accent) compete rather than either one popping;
+  // a single accent reads as more "eye-catching" against a calm field
+  // than two competing hues do against each other. So: the ground stays
+  // quiet, and red gets a real but small role instead of a dominant
+  // one — it's the danger color already, and now also the second ink
+  // categoryStamp() (below) alternates with blue, instead of sage.
   // Kept in the same THEME_KEYS shape as every other preset (see below)
   // so the existing custom-color editor in Settings works on it unchanged.
-  { name: 'Card Catalog', bg0:'#1c170f', bg1:'#241e15', bg2:'#2c251a', bg3:'#362d1f', bg4:'#423725',
-    border:'#4a4030', border2:'#5c5138', text0:'#f4ecdd', text1:'#d8ccb0', text2:'#a89878',
-    text3:'#7c7360', accent:'#6f9bd1', accent2:'#4f7ab8', teal:'#5c7a52', coral:'#7a2e1f', purple:'#5a6b8c',
-    accent_ink:'#1c170f' },
+  { name: 'Card Catalog', bg0:'#141a24', bg1:'#1b2330', bg2:'#212b3a', bg3:'#283445', bg4:'#303e52',
+    border:'#34435a', border2:'#445674', text0:'#eef1f6', text1:'#c7d0dd', text2:'#93a0b5',
+    text3:'#6b7691', accent:'#6f9bd1', accent2:'#4f7ab8', teal:'#5c7a52', coral:'#c1503d', purple:'#5a6b8c',
+    accent_ink:'#141a24' },
   { name: 'Ember', bg0:'#0e0d0b', bg1:'#161410', bg2:'#1e1b16', bg3:'#28241c', bg4:'#332e24',
     border:'#3a342a', border2:'#4a4236', text0:'#f0ead8', text1:'#c8bfa8', text2:'#8a7f6a',
     text3:'#5a5244', accent:'#c9a84c', accent2:'#a07830', teal:'#5a9e8f', coral:'#c46a52', purple:'#8b7ec8',
@@ -485,11 +490,15 @@ function categoryStamp(category) {
   svg.setAttribute('aria-hidden', 'true');
 
   // Stable per-category choice between the theme's two "ink" colors, so
-  // the same category always lands on the same one across a visit.
+  // the same category always lands on the same one across a visit. Blue
+  // and red, not blue and sage — sage stays the tag color everywhere else,
+  // but the stamp specifically is where red gets its small, real role
+  // instead of being confined to the danger button (see THEME_PRESETS).
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
-  const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--teal';
-  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f9bd1';
+  const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--coral';
+  const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+    || (varName === '--accent' ? '#6f9bd1' : '#c1503d');
 
   const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
   const defs = document.createElementNS(NS, 'defs');
