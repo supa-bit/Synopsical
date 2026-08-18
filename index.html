@@ -50,6 +50,9 @@
     <button class="btn btn-primary auth-submit" type="submit" id="auth-submit">
       Sign in
     </button>
+    <button class="linkish" type="button" id="auth-forgot">
+      Forgot password?
+    </button>
     <button class="linkish" type="button" id="auth-toggle">
       Need an account? Create one
     </button>
@@ -66,6 +69,39 @@
       Continue
     </button>
   </div>
+</div>
+
+<!-- Shown when someone lands back here from a "reset your password" link.
+     Supabase signs them into a short-lived recovery session for this alone
+     (see the PASSWORD_RECOVERY listener in app.js) — this form's only job
+     is turning that into a new password via auth.updateUser(). -->
+<div id="reset-screen" hidden>
+  <form id="reset-form" class="setup-card" autocomplete="off">
+    <h1 class="auth-logo">SYNOPSICAL</h1>
+    <p class="auth-sub">Choose a new password.</p>
+
+    <label class="field-label" for="reset-password">New password</label>
+    <div class="password-wrap">
+      <input class="input" type="password" id="reset-password"
+             autocomplete="new-password" required minlength="6">
+      <button class="password-toggle" type="button" id="reset-password-toggle"
+              aria-label="Show password" aria-pressed="false">Show</button>
+    </div>
+
+    <label class="field-label" for="reset-password-confirm">Confirm new password</label>
+    <div class="password-wrap">
+      <input class="input" type="password" id="reset-password-confirm"
+             autocomplete="new-password" required minlength="6">
+      <button class="password-toggle" type="button" id="reset-password-confirm-toggle"
+              aria-label="Show password" aria-pressed="false">Show</button>
+    </div>
+
+    <div id="reset-error" class="auth-error" role="alert" hidden></div>
+
+    <button class="btn btn-primary auth-submit" type="submit" id="reset-submit">
+      Set new password
+    </button>
+  </form>
 </div>
 
 <!-- Shown when config.js has not been filled in yet. -->

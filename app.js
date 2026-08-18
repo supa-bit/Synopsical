@@ -1714,17 +1714,42 @@ function showVerified(hasSession) {
   };
 }
 
+/**
+ * Shown when supabase-js fires the PASSWORD_RECOVERY auth event — the
+ * signal that this page load is a bounce-back from a "reset your
+ * password" email link, already exchanged for a short-lived session by
+ * the time this fires. Unlike isEmailConfirmationRedirect() above, this
+ * doesn't need to parse the URL itself: PASSWORD_RECOVERY is the
+ * documented Supabase event for exactly this, and covers both the hash-
+ * based and PKCE-code-based link formats without caring which one a given
+ * project is configured for.
+ */
+function showResetScreen() {
+  $('reset-screen').hidden = false;
+  $('auth-screen').hidden = true;
+  $('setup-screen').hidden = true;
+  $('verified-screen').hidden = true;
+  $('app').hidden = true;
+  $('reset-password').value = '';
+  $('reset-password-confirm').value = '';
+  $('reset-error').hidden = true;
+  setPasswordVisible('reset-password', false);
+  setPasswordVisible('reset-password-confirm', false);
+}
+
 function showAuth(mode = 'signin') {
   $('auth-screen').hidden = false;
   $('app').hidden = true;
   $('setup-screen').hidden = true;
   $('verified-screen').hidden = true;
-  $('auth-sub').textContent = mode === 'signin'
-    ? 'Sign in to reach your entries.'
-    : 'Create an account to get started.';
-  $('auth-submit').textContent = mode === 'signin' ? 'Sign in' : 'Create account';
-  $('auth-toggle').textContent = mode === 'signin'
-    ? 'Need an account? Create one' : 'Already have an account? Sign in';
+  $('reset-screen').hidden = true;
+  $('auth-sub').textContent = mode === 'signin' ? 'Sign in to reach your entries.'
+    : mode === 'signup' ? 'Create an account to get started.'
+    : 'Enter your email and we’ll send you a reset link.'; // forgot
+  $('auth-submit').textContent = mode === 'signin' ? 'Sign in'
+    : mode === 'signup' ? 'Create account' : 'Send reset link';
+  $('auth-toggle').textContent = mode === 'signin' ? 'Need an account? Create one'
+    : mode === 'signup' ? 'Already have an account? Sign in' : 'Back to sign in';
   $('auth-password').autocomplete = mode === 'signin' ? 'current-password' : 'new-password';
   $('auth-form').dataset.mode = mode;
 
@@ -1733,6 +1758,18 @@ function showAuth(mode = 'signin') {
   $('auth-confirm-label').hidden = !isSignup;
   $('auth-confirm-wrap').hidden = !isSignup;
   if (!isSignup) $('auth-password-confirm').value = '';
+
+  // Forgot-password mode needs only the email field — no password to sign
+  // in with yet. Clearing `required` here matters: a hidden-but-required
+  // field silently blocks form submission (the browser's native validation
+  // popup can't even be seen), not just a cosmetic hide.
+  const isForgot = mode === 'forgot';
+  const passwordWrap = $('auth-password').closest('.password-wrap');
+  passwordWrap.hidden = isForgot;
+  passwordWrap.previousElementSibling.hidden = isForgot; // its <label>
+  $('auth-password').required = !isForgot;
+  if (isForgot) $('auth-password').value = '';
+  $('auth-forgot').hidden = mode !== 'signin';
 
   // Re-mask both fields on every mode switch, so a password shown before
   // switching forms doesn't stay visible without the person noticing.
@@ -1752,11 +1789,17 @@ function setPasswordVisible(inputId, visible) {
 
 function wireAuth() {
   $('auth-toggle').addEventListener('click', () => {
-    showAuth($('auth-form').dataset.mode === 'signin' ? 'signup' : 'signin');
+    const mode = $('auth-form').dataset.mode;
+    showAuth(mode === 'forgot' ? 'signin' : mode === 'signin' ? 'signup' : 'signin');
     $('auth-error').hidden = true;
   });
 
-  for (const id of ['auth-password', 'auth-password-confirm']) {
+  $('auth-forgot').addEventListener('click', () => {
+    showAuth('forgot');
+    $('auth-error').hidden = true;
+  });
+
+  for (const id of ['auth-password', 'auth-password-confirm', 'reset-password', 'reset-password-confirm']) {
     $(id + '-toggle').addEventListener('click', () => {
       setPasswordVisible(id, $(id).type === 'password');
     });
@@ -1766,11 +1809,31 @@ function wireAuth() {
     ev.preventDefault();
     const mode = $('auth-form').dataset.mode;
     const email = $('auth-email').value.trim();
-    const password = $('auth-password').value;
     const errBox = $('auth-error');
     const submit = $('auth-submit');
 
     errBox.hidden = true;
+
+    if (mode === 'forgot') {
+      submit.disabled = true;
+      submit.textContent = 'Sending…';
+      const { error } = await State.sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      submit.disabled = false;
+      submit.textContent = 'Send reset link';
+      // Same message either way an address exists or not — Supabase's
+      // resetPasswordForEmail doesn't reveal that, on purpose (it's how
+      // this form avoids becoming a way to check who has an account), and
+      // this follows suit rather than branching on data/error here.
+      errBox.textContent = error ? error.message
+        : 'If that email has an account, a reset link is on its way.';
+      errBox.hidden = false;
+      if (!error) showAuth('signin');
+      return;
+    }
+
+    const password = $('auth-password').value;
 
     if (mode === 'signup' && password !== $('auth-password-confirm').value) {
       errBox.textContent = 'Those two passwords don’t match.';
@@ -1801,6 +1864,40 @@ function wireAuth() {
       return;
     }
     await start(data.session.user);
+  });
+
+  $('reset-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const password = $('reset-password').value;
+    const confirm = $('reset-password-confirm').value;
+    const errBox = $('reset-error');
+    const submit = $('reset-submit');
+
+    errBox.hidden = true;
+    if (password !== confirm) {
+      errBox.textContent = 'Those two passwords don’t match.';
+      errBox.hidden = false;
+      $('reset-password-confirm').focus();
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = 'Setting…';
+    const { data, error } = await State.sb.auth.updateUser({ password });
+    submit.disabled = false;
+    submit.textContent = 'Set new password';
+
+    if (error) {
+      errBox.textContent = error.message;
+      errBox.hidden = false;
+      return;
+    }
+    // The recovery link already left them signed in (that's what the
+    // PASSWORD_RECOVERY session is) — updateUser() just turned that
+    // temporary session into a normal one, so there's nothing left to sign
+    // in again for. Straight into the app, same as any other sign-in.
+    toast('Password updated');
+    await start(data.user);
   });
 
   $('btn-signout').addEventListener('click', async () => {
@@ -1883,22 +1980,40 @@ async function boot() {
   }
 
   State.sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+  // Registered before anything else touches auth, so it's already in place
+  // before supabase-js finishes processing a "reset your password" link's
+  // token from the URL and fires this. See showResetScreen() for why this
+  // event, rather than parsing the URL the way isEmailConfirmationRedirect()
+  // below does — a recovery link leaves a real, valid session (that's the
+  // whole mechanism), so without this the plain `data.session?.user` check
+  // near the bottom would just drop them into the app with their old
+  // password still live, instead of onto the "choose a new password" form.
+  let isRecovery = false;
+  State.sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') isRecovery = true;
+  });
+
   wireAuth();
   wireChrome();
 
   const confirming = isEmailConfirmationRedirect();
   const { data } = await State.sb.auth.getSession();
 
-  // The confirmation link leaves a session token sitting in the address
-  // bar. supabase-js has already read it by the time we get here, so it
-  // serves no further purpose — and leaving it visible is a needless way
-  // to leak a session if that URL is ever copied, screenshotted, or shared.
-  if (confirming) {
+  // Both link types leave a token sitting in the address bar that
+  // supabase-js has already read by the time we get here, so it serves no
+  // further purpose — and leaving it visible is a needless way to leak a
+  // session if that URL is ever copied, screenshotted, or shared.
+  if (confirming || isRecovery) {
     history.replaceState(null, '', window.location.pathname);
   }
 
   if (confirming) {
     showVerified(!!data.session?.user);
+    return;
+  }
+  if (isRecovery) {
+    showResetScreen();
     return;
   }
 
