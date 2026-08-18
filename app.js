@@ -551,6 +551,7 @@ function go(view) {
   const hash = view.name === 'detail' ? `#/entry/${view.id}`
     : view.name === 'edit' ? `#/edit/${view.id}`
     : view.name === 'new' ? '#/new'
+    : view.name === 'import' ? '#/import'
     : view.name === 'settings' ? '#/settings'
     : view.name === 'graph' ? '#/graph'
     : view.name === 'category' ? `#/category/${encodeURIComponent(view.category)}`
@@ -574,6 +575,7 @@ function readHash() {
     case 'entry': return parts[1] ? { name: 'detail', id: parts[1] } : { name: 'list' };
     case 'edit': return parts[1] ? { name: 'edit', id: parts[1] } : { name: 'list' };
     case 'new': return { name: 'new' };
+    case 'import': return { name: 'import' };
     case 'settings': return { name: 'settings' };
     case 'graph': return { name: 'graph' };
     case 'recent': return { name: 'recent' };
@@ -1043,6 +1045,209 @@ async function viewForm(editId) {
   ]));
 
   return panel;
+}
+
+/* ── Import ────────────────────────────────────────────────────────
+   Paste-a-whole-entry-at-once, as an alternative to viewForm()'s
+   field-by-field editor — for bringing in content written somewhere
+   else, or several entries in one go. Reuses Data.save() exactly as
+   viewForm() does, rather than a separate insert path, so imported
+   entries are never a second-class kind of row in the database. */
+
+const IMPORT_HEADER_RE = /^(Title|Category|Subcategory|Tags|Summary|Source|Field)\s*:\s*(.*)$/i;
+
+/**
+ * One block of pasted text -> one draft entry. Recognized header lines
+ * only count while contiguous from the very start of the block; the
+ * first line that doesn't match ends the header, and everything after it
+ * becomes the body untouched. A block with no recognized header at all
+ * still gets a title — taken from its own first line, since guessing a
+ * category from prose isn't honest, so that's left blank for the preview
+ * screen to flag instead of inventing one.
+ */
+function parseImportBlock(block) {
+  const lines = block.split('\n');
+  const draft = {
+    title: '', category: '', subcategory: '', tags: [], summary: '', source: '', fields: [], body: '',
+    _include: true,
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const m = lines[i].match(IMPORT_HEADER_RE);
+    if (!m) break;
+    const key = m[1].toLowerCase();
+    const value = m[2].trim();
+    if (key === 'title') draft.title = value;
+    else if (key === 'category') draft.category = value;
+    else if (key === 'subcategory') draft.subcategory = value;
+    else if (key === 'summary') draft.summary = value;
+    else if (key === 'source') draft.source = value;
+    else if (key === 'tags') draft.tags = value.split(',').map((t) => t.trim()).filter(Boolean);
+    else if (key === 'field') {
+      const eq = value.indexOf('=');
+      if (eq > -1) draft.fields.push({ name: value.slice(0, eq).trim(), value: value.slice(eq + 1).trim() });
+    }
+    i++;
+  }
+  const rest = lines.slice(i).join('\n').trim();
+  if (draft.title) {
+    draft.body = rest;
+  } else {
+    const restLines = rest.split('\n');
+    draft.title = (restLines[0] ?? '').trim();
+    draft.body = restLines.slice(1).join('\n').trim();
+  }
+  return draft;
+}
+
+/** Splits on any line that's just three-or-more dashes, however it's
+ *  padded — at the start, middle, or end of the paste — then parses each
+ *  surviving block. One block with no delimiter at all is one entry. */
+function parseImportText(text) {
+  return text
+    .split(/^[ \t]*-{3,}[ \t]*$/m)
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map(parseImportBlock);
+}
+
+function viewImport() {
+  const panel = el('div', { class: 'panel' });
+
+  panel.append(el('button', {
+    class: 'back-link', type: 'button',
+    onClick: () => { State.importDrafts = null; go({ name: 'list' }); },
+  }, '← Cancel'));
+
+  panel.append(el('div', { class: 'page-head' }, [
+    el('h1', { class: 'page-title', text: 'Import entries' }),
+    el('span', { class: 'page-sub', text: 'Paste one entry, or several separated by a line of ---' }),
+  ]));
+
+  panel.append(el('div', { class: 'hint', style: { marginBottom: '14px', lineHeight: '1.7' } }, [
+    'Recognized lines (all optional): ',
+    el('code', { text: 'Title:' }), ' ', el('code', { text: 'Category:' }), ' ',
+    el('code', { text: 'Subcategory:' }), ' ', el('code', { text: 'Tags:' }), ' (comma-separated) ',
+    el('code', { text: 'Summary:' }), ' ', el('code', { text: 'Source:' }), ' ',
+    el('code', { text: 'Field: Name = Value' }), ' (repeat for more). ',
+    'Everything else is the body. No header at all? The first line becomes the title.',
+  ]));
+
+  const textarea = el('textarea', {
+    class: 'textarea', style: { minHeight: '220px' },
+    placeholder: 'Title: Byzantine Iconoclasm\nCategory: History\nTags: byzantine-empire, theology\n\n'
+      + 'Two periods of imperial bans on religious icons...\n\n---\n\n'
+      + 'Title: Mycorrhizal Networks\nCategory: Biology\n...',
+  });
+  panel.append(el('div', { class: 'field' }, [textarea]));
+
+  const previewHost = el('div');
+  panel.append(previewHost);
+
+  function renderPreview() {
+    clear(previewHost);
+    const drafts = State.importDrafts;
+    if (!drafts?.length) return;
+
+    previewHost.append(el('div', {
+      class: 'section-label', text: `${drafts.length} ${drafts.length === 1 ? 'entry' : 'entries'} found`,
+    }));
+
+    for (const d of drafts) {
+      const row = el('div', { class: 'import-row' });
+
+      const titleInput = el('input', { class: 'input', value: d.title, placeholder: 'Title (required)' });
+      const categoryInput = el('input', {
+        class: 'input', value: d.category, placeholder: 'Category (required)', list: 'cat-options',
+      });
+      const warn = el('span', { class: 'import-warn' });
+
+      function refreshWarn() {
+        const missing = [];
+        if (!d.title.trim()) missing.push('title');
+        if (!d.category.trim()) missing.push('category');
+        warn.textContent = missing.length ? `Needs a ${missing.join(' and a ')} before this can be imported` : '';
+      }
+      titleInput.addEventListener('input', () => { d.title = titleInput.value; refreshWarn(); });
+      categoryInput.addEventListener('input', () => { d.category = categoryInput.value; refreshWarn(); });
+      refreshWarn();
+
+      const includeToggle = el('input', { type: 'checkbox' });
+      includeToggle.checked = d._include;
+      includeToggle.addEventListener('change', () => {
+        d._include = includeToggle.checked;
+        row.style.opacity = d._include ? '1' : '0.45';
+      });
+
+      row.append(
+        el('div', { class: 'import-row-head' }, [
+          includeToggle,
+          el('div', { class: 'form-grid', style: { flex: '1' } }, [titleInput, categoryInput]),
+        ]),
+        d.tags.length
+          ? el('div', { class: 'tags-wrap' }, d.tags.map((t) => el('span', { class: 'tag-pill', text: t })))
+          : null,
+        d.summary ? el('div', { class: 'hint', text: d.summary }) : null,
+        d.body ? el('div', { class: 'hint', text: d.body.slice(0, 160) + (d.body.length > 160 ? '…' : '') }) : null,
+        warn,
+      );
+      previewHost.append(row);
+    }
+
+    const importBtn = el('button', { class: 'btn btn-primary', type: 'button' }, 'Import entries');
+    importBtn.addEventListener('click', () => runImport(drafts, importBtn));
+    previewHost.append(el('div', { class: 'form-actions' }, [importBtn]));
+  }
+
+  const previewBtn = el('button', { class: 'btn btn-primary', type: 'button' }, 'Preview');
+  previewBtn.addEventListener('click', () => {
+    if (!textarea.value.trim()) { toast('Paste something first', true); return; }
+    State.importDrafts = parseImportText(textarea.value);
+    renderPreview();
+  });
+  panel.append(el('div', { class: 'form-actions' }, [previewBtn]));
+
+  if (State.importDrafts?.length) renderPreview();
+
+  return panel;
+}
+
+async function runImport(drafts, btn) {
+  const included = drafts.filter((d) => d._include);
+  const invalid = included.filter((d) => !d.title.trim() || !d.category.trim());
+  if (invalid.length) {
+    toast(`${invalid.length} ${invalid.length === 1 ? 'entry needs' : 'entries need'} a title and category first`, true);
+    return;
+  }
+  if (!included.length) { toast('Nothing selected to import', true); return; }
+
+  btn.disabled = true;
+  let done = 0, failed = 0;
+  for (const d of included) {
+    btn.textContent = `Importing ${done + failed + 1} of ${included.length}…`;
+    try {
+      // Same default faceplate viewForm() gives a brand-new entry — kept
+      // identical rather than diverging, so an imported entry doesn't look
+      // like a second-class citizen next to one made by hand.
+      const id = await Data.save(
+        {
+          title: d.title.trim(), category: d.category.trim(), subcategory: d.subcategory,
+          summary: d.summary, body: d.body, source: d.source,
+          fp: { type: 'text', text: '', bg: '#28241c', color: '#c9a84c', font: 'default', image: null },
+        },
+        d.fields, d.tags, [], null
+      );
+      Data.requestEmbedding(id).catch(() => {}); // best-effort, same as a normal save
+      done++;
+    } catch {
+      failed++;
+    }
+  }
+
+  State.importDrafts = null;
+  await Data.loadAll();
+  toast(failed ? `Imported ${done}, ${failed} failed — check your connection and try again for those` : `Imported ${done} ${done === 1 ? 'entry' : 'entries'}`, !!failed);
+  go({ name: 'list' });
 }
 
 function faceplateBuilder(F) {
@@ -1678,6 +1883,7 @@ async function render() {
     case 'detail': node = await viewDetail(v.id); break;
     case 'edit':   node = await viewForm(v.id); break;
     case 'new':    node = await viewForm(null); break;
+    case 'import': node = viewImport(); break;
     case 'settings': node = viewSettings(); break;
     case 'graph':  node = viewGraph(); break;
     case 'recent':
@@ -2040,6 +2246,7 @@ function wireChrome() {
   $('nav-recent').addEventListener('click', () => go({ name: 'recent' }));
   $('nav-graph').addEventListener('click', () => go({ name: 'graph' }));
   $('btn-new').addEventListener('click', () => { State.form = null; go({ name: 'new' }); });
+  $('btn-import').addEventListener('click', () => go({ name: 'import' }));
   $('btn-settings').addEventListener('click', () => go({ name: 'settings' }));
   $('btn-export').addEventListener('click', exportEverything);
 

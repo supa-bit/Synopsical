@@ -454,6 +454,15 @@ code {
 .hint { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text3); margin-top: 5px; }
 .form-actions { display: flex; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
 
+/* ── Import ─────────────────────────────────────────────────────── */
+.import-row {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px; margin-bottom: 9px; border: 1px solid var(--border);
+  border-radius: var(--radius-lg); background: var(--bg1); transition: opacity 0.15s;
+}
+.import-row-head { display: flex; align-items: center; gap: 10px; }
+.import-warn { font-family: var(--font-mono); font-size: 0.75rem; color: var(--coral); }
+
 /* Custom fields */
 .fields-list { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; }
 .field-input-row { display: grid; grid-template-columns: 1fr 1.4fr auto; }
