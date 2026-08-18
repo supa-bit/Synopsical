@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
   <meta name="description" content="Synopsical is a personal, cloud-synced compendium — write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
+  <!-- No og:image/twitter:image yet — a real 1200x630 OG image needs
+       actual design work neither of us can produce well from here, so
+       this deliberately stays text-only (twitter:card "summary", not
+       "summary_large_image", which would show a broken/empty box
+       without an image) rather than shipping something half-done. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Synopsical">
+  <meta property="og:url" content="https://synopsical.com/">
+  <meta property="og:title" content="Synopsical — keep an encyclopedia of your own">
+  <meta property="og:description" content="Write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Synopsical — keep an encyclopedia of your own">
+  <meta name="twitter:description" content="Write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
   <title>Synopsical</title>
   <!-- Warms up the connection for the optional Google Fonts, which are
        only actually fetched if someone picks one in Appearance settings. -->
@@ -149,6 +162,16 @@
   </div>
 
   <footer class="home-footer">
+    <div class="home-wrap home-newsletter-row">
+      <div>
+        <div class="home-newsletter-label">Get occasional updates — new features, nothing else.</div>
+        <form id="newsletter-form" class="home-newsletter-form">
+          <input type="email" id="newsletter-email" class="input" placeholder="you@example.com" required>
+          <button type="submit" class="btn btn-sm">Subscribe</button>
+        </form>
+        <span id="newsletter-msg" class="hint home-newsletter-msg" hidden></span>
+      </div>
+    </div>
     <div class="home-wrap">
       <div>Synopsical — a personal compendium.</div>
       <nav class="home-footer-nav">
@@ -332,5 +355,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="newsletter.js"></script>
 </body>
 </html>

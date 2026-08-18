@@ -385,6 +385,14 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# subscribe-newsletter has to be callable by a signed-out visitor — the
+# newsletter signup form doesn't require a Synopsical account — so it's
+# the one function in this project that deliberately skips JWT
+# verification. embed-entry and delete-account both need a real signed-in
+# caller and keep the default (verify_jwt = true, so no entry here).
+[functions.subscribe-newsletter]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

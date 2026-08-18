@@ -209,6 +209,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .pricing-card .btn { margin-top: auto; text-align: center; text-decoration: none; }
 .pricing-card .btn[aria-disabled="true"] { opacity: 0.5; cursor: default; pointer-events: none; }
 
+.home-newsletter-row { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.home-newsletter-label { font-size: 0.8rem; color: var(--text2); margin-bottom: 8px; }
+.home-newsletter-form { display: flex; gap: 8px; max-width: 360px; flex-wrap: wrap; }
+.home-newsletter-form .input { flex: 1; min-width: 180px; }
+.home-newsletter-msg { display: block; margin-top: 8px; }
+
 /* ── Sign-in and setup ──────────────────────────────────────────── */
 #auth-screen, #setup-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;

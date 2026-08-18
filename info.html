@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
   <meta name="description" content="What Synopsical is and why it's built the way it is — cross-referencing, categories and tags, and a compendium that looks like yours, not everyone else's.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Synopsical">
+  <meta property="og:url" content="https://synopsical.com/info.html">
+  <meta property="og:title" content="Info — Synopsical">
+  <meta property="og:description" content="What Synopsical is and why it's built the way it is — cross-referencing, categories and tags, and a compendium that looks like yours, not everyone else's.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Info — Synopsical">
+  <meta name="twitter:description" content="What Synopsical is and why it's built the way it is — cross-referencing, categories and tags, and a compendium that looks like yours, not everyone else's.">
   <title>Info — Synopsical</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -72,6 +80,16 @@
   </div>
 
   <footer class="home-footer">
+    <div class="home-wrap home-newsletter-row">
+      <div>
+        <div class="home-newsletter-label">Get occasional updates — new features, nothing else.</div>
+        <form id="newsletter-form" class="home-newsletter-form">
+          <input type="email" id="newsletter-email" class="input" placeholder="you@example.com" required>
+          <button type="submit" class="btn btn-sm">Subscribe</button>
+        </form>
+        <span id="newsletter-msg" class="hint home-newsletter-msg" hidden></span>
+      </div>
+    </div>
     <div class="home-wrap">
       <div>Synopsical — a personal compendium.</div>
       <nav class="home-footer-nav">
@@ -81,5 +99,7 @@
     </div>
   </footer>
 </div>
+<script src="config.js"></script>
+<script src="newsletter.js"></script>
 </body>
 </html>

@@ -368,6 +368,16 @@ const Data = {
     if (error) throw error;
   },
 
+  // Permanently deletes the signed-in user's own account — see
+  // supabase/functions/delete-account/index.ts for what actually runs
+  // server-side. Every entries/tags/links/settings row (and profiles, if
+  // that migration has been run) cascades away automatically once the
+  // auth user is gone; this call is what makes that happen.
+  async deleteAccount() {
+    const { error } = await State.sb.functions.invoke('delete-account');
+    if (error) throw error;
+  },
+
   // Semantic neighbours of one entry, via the related_entries() Postgres
   // function — looks up that entry's own stored embedding and orders
   // everything else in the account by vector distance to it. Returns
@@ -1598,6 +1608,32 @@ function viewSettings() {
   }
   panel.append(el('div', { class: 'section' }, [
     el('div', { class: 'section-label', text: 'Fine tuning' }), colours,
+  ]));
+
+  panel.append(el('div', { class: 'section' }, [
+    el('div', { class: 'section-label', text: 'Account' }),
+    el('p', { class: 'hint', style: { marginBottom: '12px' } },
+      'Deleting your account removes every entry, tag, link, custom field, uploaded font and faceplate image — permanently.'),
+    el('button', {
+      class: 'btn btn-danger', type: 'button',
+      onClick: async () => {
+        const ok = await confirmDialog(
+          'Delete your account?',
+          'Every entry, tag, link, custom field, uploaded font and faceplate image will be permanently removed. This cannot be undone.',
+          'Delete my account'
+        );
+        if (!ok) return;
+        try {
+          await Data.deleteAccount();
+          State.user = null;
+          State.entries = [];
+          toast('Your account and all its data have been deleted');
+          showHomepage();
+        } catch (err) {
+          toast(err.message || 'Could not delete your account', true);
+        }
+      },
+    }, 'Delete my account'),
   ]));
 
   return panel;
