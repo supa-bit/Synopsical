@@ -48,6 +48,136 @@ body {
 button, input, textarea, select { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 
+/* ── Public homepage ────────────────────────────────────────────────
+   The one screen in this file that's genuinely visible in the raw HTML
+   (see the comment on #homepage in index.html) — everything else in this
+   section is scoped with a home- prefix specifically so it can't collide
+   with the signed-in app's own styles above/below it, even though a
+   check at write-time found no actual name clashes.
+
+   Reuses the same --bg0/--accent/--font-body/etc. tokens as the rest of
+   the app rather than hardcoding colors — those default to the Card
+   Catalog values in :root before applyTheme() ever runs, which is exactly
+   the "single fixed dark world" this page wants: it's shown only to
+   logged-out visitors, so it always sees the same look regardless of any
+   theme a signed-in user might have picked, with zero extra code. */
+#homepage {
+  color: var(--text1); font-family: var(--font-ui);
+  background-color: var(--bg0);
+  background-repeat: no-repeat;
+  /* 30 blobs, fully random placement, moderate brightness — the exact
+     output of an interactive amount/symmetry/brightness tuner, tuned
+     against a to-scale full-page preview and regenerated here with the
+     same seeded algorithm so this matches what was actually previewed. */
+  background-image:
+    radial-gradient(circle 55px at 60% 45%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 90px at 85% 67%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 150px at 17% 53%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 210px at 27% 62%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 260px at 87% 47%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 55px at 25% 88%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 90px at 75% 31%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 150px at 20% 50%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 210px at 69% 61%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 260px at 0% 47%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 55px at 84% 5%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 90px at 59% 3%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 150px at 27% 6%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 210px at 19% 78%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 260px at 53% 3%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 55px at 17% 84%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 90px at 49% 81%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 150px at 32% 45%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 210px at 4% 5%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 260px at 56% 60%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 55px at 25% 65%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 90px at 21% 30%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 150px at 74% 86%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 210px at 51% 20%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 260px at 28% 29%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 55px at 7% 66%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 90px at 68% 69%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%),
+    radial-gradient(circle 150px at 93% 9%, #bcd4ef31 0%, #bcd4ef0f 45%, transparent 100%),
+    radial-gradient(circle 210px at 94% 43%, #6f9bd131 0%, #6f9bd10f 45%, transparent 100%),
+    radial-gradient(circle 260px at 94% 14%, #4f7ab831 0%, #4f7ab80f 45%, transparent 100%);
+}
+.home-wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+@media (max-width: 640px) { .home-wrap { padding: 0 18px; } }
+
+.home-header {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 28px; border-bottom: 1px solid var(--border);
+}
+.home-wordmark { font-family: var(--font-body); font-weight: 700; font-size: 1.267rem; letter-spacing: 0.08em; color: var(--text0); }
+.home-signin-link {
+  font-family: var(--font-mono); font-size: 0.867rem; color: var(--text2);
+  background: none; border: 0; border-bottom: 1px solid var(--border2);
+  padding-bottom: 2px; cursor: pointer;
+}
+.home-signin-link:hover { color: var(--text0); border-color: var(--text2); }
+
+.home-hero { padding: 5.07rem 0 2.67rem; }
+.home-eyebrow {
+  font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 18px;
+}
+.home-headline {
+  font-family: var(--font-body); font-weight: 900; font-size: clamp(2.53rem, 6vw, 4.53rem);
+  line-height: 0.98; letter-spacing: -0.01em; color: var(--text0); margin: 0 0 24px;
+  text-wrap: balance; max-width: 15ch;
+}
+.home-subhead { font-size: 1.167rem; color: var(--text2); max-width: 52ch; line-height: 1.7; margin: 0 0 32px; }
+.home-cta-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 64px; }
+.home-cta-secondary {
+  font-family: var(--font-mono); font-size: 0.867rem; color: var(--text3);
+  background: none; border: 0; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.home-cta-secondary:hover { color: var(--text1); }
+
+.home-proof {
+  perspective: 1600px; display: flex; gap: 26px; flex-wrap: wrap;
+  justify-content: center; padding: 20px 10px 8px;
+}
+.home-proof-card {
+  width: 300px; background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 18px 20px 20px;
+}
+.home-proof-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.home-proof-stamp { flex-shrink: 0; }
+.home-proof-title { font-family: var(--font-body); font-weight: 800; font-size: 1.2rem; color: var(--text0); line-height: 1.15; }
+.home-proof-summary { font-size: 0.867rem; color: var(--text2); line-height: 1.6; margin-bottom: 12px; }
+.home-proof-tags { display: flex; gap: 9px; flex-wrap: wrap; }
+.home-proof-tag { font-family: var(--font-mono); font-size: 0.733rem; color: var(--teal); border-bottom: 1px solid var(--teal); padding-bottom: 1px; }
+
+.home-features { padding: 5.87rem 0 4.67rem; border-top: 1px solid var(--border); margin-top: 40px; }
+.home-features-h2 {
+  font-family: var(--font-body); font-weight: 800; font-size: clamp(1.73rem, 3.4vw, 2.4rem);
+  color: var(--text0); margin: 0 0 48px; max-width: 20ch; text-wrap: balance;
+}
+.home-feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 44px; }
+@media (max-width: 700px) { .home-feature-grid { grid-template-columns: 1fr; } }
+.home-feature-title {
+  font-family: var(--font-body); font-style: italic; font-weight: 700; font-size: 1.4rem;
+  color: var(--text0); margin-bottom: 10px; line-height: 1.25;
+}
+.home-feature-body { font-size: 1rem; color: var(--text2); line-height: 1.7; max-width: 44ch; }
+
+.home-closing {
+  border-top: 1px solid var(--border); padding: 4.67rem 0 5.07rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap;
+}
+.home-closing-line {
+  font-family: var(--font-body); font-weight: 800; font-size: clamp(1.47rem, 3vw, 2rem);
+  color: var(--text0); max-width: 18ch; text-wrap: balance;
+}
+
+.home-footer {
+  border-top: 1px solid var(--border); padding: 22px 0 40px;
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--text3);
+}
+
 /* ── Sign-in and setup ──────────────────────────────────────────── */
 #auth-screen, #setup-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;

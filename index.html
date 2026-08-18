@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Synopsical is a personal, cloud-synced compendium — write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
   <title>Synopsical</title>
   <!-- Warms up the connection for the optional Google Fonts, which are
        only actually fetched if someone picks one in Appearance settings. -->
@@ -17,6 +18,137 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- Public homepage — genuinely visible in the raw HTML (no `hidden`),
+     unlike every screen below it. That's the whole point: a crawler (or
+     anyone with JS disabled/slow) sees real content immediately, not a
+     blank page that only fills in after JS decides what to show. JS hides
+     this and shows the signed-in app directly for a returning session
+     (see start()), or hides it and reveals #auth-screen when someone
+     clicks Sign in / Start your compendium (see wireHomepage()). A
+     returning signed-in visitor will see a brief flash of this before JS
+     swaps to the app — an accepted tradeoff of not having a real server
+     to decide this before the page ever reaches the browser. -->
+<div id="homepage">
+  <header class="home-header">
+    <div class="topbar-notch" aria-hidden="true"></div>
+    <div class="home-wordmark">SYNOPSICAL</div>
+    <button class="home-signin-link" type="button" id="home-signin">Sign in</button>
+  </header>
+
+  <div class="home-wrap">
+    <section class="home-hero">
+      <div class="home-eyebrow">A personal compendium</div>
+      <h1 class="home-headline">Keep an encyclopedia of your own.</h1>
+      <p class="home-subhead">
+        Write entries on anything worth remembering — history, biology, your own research,
+        the things you'd otherwise forget you ever learned. Tag them, link them to each
+        other, and find them again in seconds, from any device.
+      </p>
+      <div class="home-cta-row">
+        <button class="btn btn-primary" type="button" id="home-cta-start">Start your compendium</button>
+        <button class="home-cta-secondary" type="button" id="home-cta-signin">Already have one? Sign in</button>
+      </div>
+
+      <div class="home-proof">
+        <div class="home-proof-card">
+          <div class="home-proof-top">
+            <div class="home-proof-stamp" aria-hidden="true">
+              <svg viewBox="0 0 60 60" width="46" height="46">
+                <defs><path id="home-ring1" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
+                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#6f9bd1" stroke-width="0.8" opacity="0.5"/>
+                <text font-family="var(--font-mono)" font-size="6" fill="#6f9bd1" letter-spacing="2">
+                  <textPath href="#home-ring1" startOffset="2">HISTORY…</textPath>
+                </text>
+                <text x="30" y="35" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="12" fill="#6f9bd1">HIS</text>
+              </svg>
+            </div>
+            <div class="home-proof-title">Byzantine Iconoclasm</div>
+          </div>
+          <div class="home-proof-summary">Two periods of imperial bans on religious icons, driven by theology and provincial military pressure.</div>
+          <div class="home-proof-tags">
+            <span class="home-proof-tag">byzantine-empire</span>
+            <span class="home-proof-tag">theology</span>
+          </div>
+        </div>
+
+        <div class="home-proof-card">
+          <div class="home-proof-top">
+            <div class="home-proof-stamp" aria-hidden="true">
+              <svg viewBox="0 0 60 60" width="46" height="46">
+                <defs><path id="home-ring2" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
+                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#6f9bd1" stroke-width="0.8" opacity="0.5"/>
+                <text font-family="var(--font-mono)" font-size="6" fill="#6f9bd1" letter-spacing="2">
+                  <textPath href="#home-ring2" startOffset="2">BIOLOGY…</textPath>
+                </text>
+                <text x="30" y="34" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="10.5" fill="#6f9bd1">BIO</text>
+              </svg>
+            </div>
+            <div class="home-proof-title">Mycorrhizal Networks</div>
+          </div>
+          <div class="home-proof-summary">Symbiotic fungal threads linking tree root systems — sometimes called the "wood wide web."</div>
+          <div class="home-proof-tags">
+            <span class="home-proof-tag">mycology</span>
+            <span class="home-proof-tag">forest-ecology</span>
+          </div>
+        </div>
+
+        <div class="home-proof-card">
+          <div class="home-proof-top">
+            <div class="home-proof-stamp" aria-hidden="true">
+              <svg viewBox="0 0 60 60" width="46" height="46">
+                <defs><path id="home-ring3" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
+                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#6f9bd1" stroke-width="0.8" opacity="0.5"/>
+                <text font-family="var(--font-mono)" font-size="6" fill="#6f9bd1" letter-spacing="2">
+                  <textPath href="#home-ring3" startOffset="2">PHYSICS…</textPath>
+                </text>
+                <text x="30" y="35" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="11" fill="#6f9bd1">1687</text>
+              </svg>
+            </div>
+            <div class="home-proof-title">Principia Mathematica</div>
+          </div>
+          <div class="home-proof-summary">Newton's 1687 work laying out the laws of motion and universal gravitation.</div>
+          <div class="home-proof-tags">
+            <span class="home-proof-tag">newton</span>
+            <span class="home-proof-tag">classical-mechanics</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-features">
+      <div class="home-eyebrow">What's in the drawer</div>
+      <h2 class="home-features-h2">Not a folder of notes — a catalogue of them.</h2>
+      <div class="home-feature-grid">
+        <div>
+          <div class="home-feature-title">Cross-referenced, like a real reference work</div>
+          <div class="home-feature-body">Link any entry to any other. Every page shows what it connects to, and what connects back — the way an actual encyclopedia cross-references itself, not a pile of disconnected notes.</div>
+        </div>
+        <div>
+          <div class="home-feature-title">Finds connections you didn't make</div>
+          <div class="home-feature-body">Related entries surface on their own — first by the tags and categories you already gave them, then by meaning once you've written enough for it to notice on its own.</div>
+        </div>
+        <div>
+          <div class="home-feature-title">Catalogued, not just saved</div>
+          <div class="home-feature-body">Categories, tags, and your own custom fields — organized the way an actual archive is kept, not the way a folder of loose files accumulates.</div>
+        </div>
+        <div>
+          <div class="home-feature-title">Yours to look at</div>
+          <div class="home-feature-body">Pick a theme, upload your own fonts, give each entry its own faceplate. It doesn't have to look like everyone else's notes app, because it isn't one.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-closing">
+      <div class="home-closing-line">Your compendium is waiting to be started.</div>
+      <button class="btn btn-primary" type="button" id="home-cta-start-2">Start your compendium</button>
+    </section>
+  </div>
+
+  <footer class="home-footer">
+    <div class="home-wrap">Synopsical — a personal compendium.</div>
+  </footer>
+</div>
 
 <!-- Sign-in gate. Everything else stays hidden until there is a session. -->
 <div id="auth-screen" hidden>

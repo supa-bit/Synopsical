@@ -1729,6 +1729,7 @@ function isEmailConfirmationRedirect() {
 
 function showVerified(hasSession) {
   $('verified-screen').hidden = false;
+  $('homepage').hidden = true;
   $('auth-screen').hidden = true;
   $('setup-screen').hidden = true;
   $('app').hidden = true;
@@ -1756,6 +1757,7 @@ function showVerified(hasSession) {
  */
 function showResetScreen() {
   $('reset-screen').hidden = false;
+  $('homepage').hidden = true;
   $('auth-screen').hidden = true;
   $('setup-screen').hidden = true;
   $('verified-screen').hidden = true;
@@ -1769,6 +1771,7 @@ function showResetScreen() {
 
 function showAuth(mode = 'signin') {
   $('auth-screen').hidden = false;
+  $('homepage').hidden = true;
   $('app').hidden = true;
   $('setup-screen').hidden = true;
   $('verified-screen').hidden = true;
@@ -1942,6 +1945,7 @@ function wireAuth() {
 
 async function start(user) {
   State.user = user;
+  $('homepage').hidden = true;
   $('auth-screen').hidden = true;
   $('setup-screen').hidden = true;
   $('verified-screen').hidden = true;
@@ -2002,9 +2006,22 @@ function wireChrome() {
   });
 }
 
+/**
+ * The public homepage's own four exits — all of them just hide it and
+ * hand off to the existing auth machinery, never touching #homepage's
+ * own hidden state anywhere else (showAuth() already does that).
+ */
+function wireHomepage() {
+  $('home-signin').addEventListener('click', () => showAuth('signin'));
+  $('home-cta-signin').addEventListener('click', () => showAuth('signin'));
+  $('home-cta-start').addEventListener('click', () => showAuth('signup'));
+  $('home-cta-start-2').addEventListener('click', () => showAuth('signup'));
+}
+
 async function boot() {
   const cfg = window.SYNOPSICAL_CONFIG ?? {};
   if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
+    $('homepage').hidden = true;
     $('setup-screen').hidden = false;
     return;
   }
@@ -2026,6 +2043,7 @@ async function boot() {
 
   wireAuth();
   wireChrome();
+  wireHomepage();
 
   const confirming = isEmailConfirmationRedirect();
   const { data } = await State.sb.auth.getSession();
@@ -2047,8 +2065,11 @@ async function boot() {
     return;
   }
 
+  // No forced showAuth('signin') here on purpose — #homepage is already
+  // the visible-by-default state in the raw HTML (see its comment in
+  // index.html), so a logged-out visitor doesn't need anything done to
+  // them at all. Only a real session gets routed straight past it.
   if (data.session?.user) await start(data.session.user);
-  else showAuth('signin');
 }
 
 boot();
