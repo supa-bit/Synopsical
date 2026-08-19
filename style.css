@@ -278,9 +278,22 @@ code {
   display: grid; grid-template-columns: 236px 1fr;
   grid-template-rows: 54px 1fr; height: 100vh; overflow: hidden;
 }
+#btn-menu { display: none; }
+
+/* Below 780px the sidebar no longer fits as a permanent column — it
+   becomes a slide-in drawer (toggled via #btn-menu, see wireChrome())
+   over a click-to-close backdrop, instead of just disappearing with
+   nowhere else to reach Browse/Categories/Tags from. */
 @media (max-width: 780px) {
   #app { grid-template-columns: 1fr; }
-  #sidebar { display: none; }
+  #btn-menu { display: inline-flex; align-items: center; justify-content: center; }
+  #sidebar {
+    position: fixed; top: 54px; left: 0; bottom: 0; width: min(82vw, 280px);
+    transform: translateX(-100%); transition: transform 0.18s ease;
+    z-index: 140; box-shadow: 3px 0 20px #0008;
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-backdrop { position: fixed; top: 54px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 130; }
 }
 
 #topbar {
@@ -288,11 +301,6 @@ code {
   grid-column: 1 / -1; background: var(--bg1);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 12px; padding: 0 18px;
-}
-.topbar-notch {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-  width: 13px; height: 13px; border-radius: 50%;
-  background: var(--bg1); border: 1.4px solid var(--border);
 }
 .logo {
   font-family: var(--font-body); font-size: 1.067rem; color: var(--accent);

@@ -287,9 +287,9 @@
 
 <div id="app" hidden>
   <header id="topbar">
-    <!-- The one curve on the whole shell: the reinforcement ring a card
-         catalog's own drawer-rod punch hole would have. -->
-    <div class="topbar-notch" aria-hidden="true"></div>
+    <!-- Mobile-only: reveals the Browse/Categories/Tags drawer below 780px,
+         where it no longer fits as a permanent column (see #sidebar). -->
+    <button class="btn btn-sm" id="btn-menu" type="button" aria-label="Open menu">☰</button>
     <button class="logo" id="nav-home" type="button">
       SYNOPSICAL<span id="stats-pill"></span>
     </button>
@@ -336,6 +336,8 @@
       <button class="btn btn-sm" id="btn-export" type="button">Export everything</button>
     </div>
   </nav>
+
+  <div id="sidebar-backdrop" hidden></div>
 
   <main id="main">
     <div id="view"></div>

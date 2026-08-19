@@ -556,7 +556,18 @@ function categoryStamp(category) {
 
 /* ── Navigation ────────────────────────────────────────────────── */
 
+/* Mobile drawer (see the 780px breakpoint in style.css) — #sidebar sits
+ * fixed off-canvas there instead of being a permanent grid column, so it
+ * needs an explicit open/closed state rather than just always being
+ * visible. No-ops harmlessly above the breakpoint, where .open/the
+ * backdrop are never shown regardless of this class/hidden state. */
+function setSidebarOpen(open) {
+  $('sidebar').classList.toggle('open', open);
+  $('sidebar-backdrop').hidden = !open;
+}
+
 function go(view) {
+  setSidebarOpen(false); // picking anywhere to go to should close the drawer
   State.view = view;
   const hash = view.name === 'detail' ? `#/entry/${view.id}`
     : view.name === 'edit' ? `#/edit/${view.id}`
@@ -1067,6 +1078,46 @@ async function viewForm(editId) {
 const IMPORT_HEADER_RE = /^(Title|Category|Subcategory|Tags|Summary|Source|Field)\s*:\s*(.*)$/i;
 
 /**
+ * Handed to the user via "Copy AI prompt" on the import screen. Written so
+ * they can paste it into any AI chat, tack on what they actually want at
+ * the bottom, and get back text that pastes into the import box above with
+ * zero cleanup — matching parseImportBlock/parseImportText exactly (header
+ * lines contiguous from the top of the block, one blank line, then body;
+ * entries separated by a lone "---" line).
+ */
+const AI_IMPORT_PROMPT = `I'm writing entries for my knowledge base app, Synopsical. I need your reply in a specific plain-text format so I can paste it straight into the app's import box with no edits. Please follow this exactly.
+
+FORMAT
+
+For each entry, start with header lines — one per line, back-to-back with NO blank lines between them. Skip any header you have nothing for; don't leave it blank.
+
+Title: <the entry's title>
+Category: <one category>
+Subcategory: <optional>
+Tags: <comma-separated tags>
+Summary: <one or two sentence summary>
+Source: <optional URL or citation>
+Field: <name> = <value>
+
+("Field:" can repeat, one line per custom field.)
+
+Right after the last header line, leave exactly one blank line, then write the entry's full body as plain prose paragraphs — no markdown, no headings, no bullet points, just text.
+
+Title and Category are REQUIRED on every entry — never omit them.
+
+If I ask for more than one entry, separate each complete entry (headers + body) with a line containing only three dashes:
+
+---
+
+Output ONLY the entries in this format. No intro, no "Here you go", no code fences, no notes before or after — just the raw text, ready to paste.
+
+WHAT TO WRITE
+
+Replace this section with your own title(s) and a short description of what each entry should cover — one per line if you want more than one, e.g.:
+Byzantine Iconoclasm: the two periods of imperial bans on religious icons in the Byzantine Empire
+Mycorrhizal Networks: how fungal networks let trees share nutrients and signals`;
+
+/**
  * One block of pasted text -> one draft entry. Recognized header lines
  * only count while contiguous from the very start of the block; the
  * first line that doesn't match ends the header, and everything after it
@@ -1129,9 +1180,20 @@ function viewImport() {
     onClick: () => { State.importDrafts = null; go({ name: 'list' }); },
   }, '← Cancel'));
 
+  const aiPromptBtn = el('button', { class: 'btn btn-sm', type: 'button' }, '⧉ Copy AI prompt');
+  aiPromptBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
+      toast('Prompt copied — paste it into your AI, add what you want written, then paste its reply into the box below');
+    } catch {
+      toast('Could not copy — your browser may be blocking clipboard access', true);
+    }
+  });
+
   panel.append(el('div', { class: 'page-head' }, [
     el('h1', { class: 'page-title', text: 'Import entries' }),
     el('span', { class: 'page-sub', text: 'Paste one entry, or several separated by a line of ---' }),
+    aiPromptBtn,
   ]));
 
   panel.append(el('div', { class: 'hint', style: { marginBottom: '14px', lineHeight: '1.7' } }, [
@@ -2296,11 +2358,16 @@ function wireChrome() {
     }, 250);
   });
 
+  $('btn-menu').addEventListener('click', () => setSidebarOpen(!$('sidebar').classList.contains('open')));
+  $('sidebar-backdrop').addEventListener('click', () => setSidebarOpen(false));
+
   $('modal-overlay').addEventListener('click', (ev) => {
     if (ev.target === $('modal-overlay')) $('modal-overlay').hidden = true;
   });
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && !$('modal-overlay').hidden) $('modal-overlay').hidden = true;
+    if (ev.key !== 'Escape') return;
+    if (!$('modal-overlay').hidden) $('modal-overlay').hidden = true;
+    if ($('sidebar').classList.contains('open')) setSidebarOpen(false);
   });
 
   // Guarded on State.user because the pre-auth screens have their own
