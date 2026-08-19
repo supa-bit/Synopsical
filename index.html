@@ -356,7 +356,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js"></script>
-<script src="newsletter.js"></script>
+<!-- type="module": app.js now imports lib/import-parser.mjs, which native
+     ES modules support directly in the browser -- no bundler needed. Module
+     scripts run deferred (after the document is parsed), so newsletter.js
+     is also a module here to keep it running after app.js, same relative
+     order as before, rather than jumping ahead of it. -->
+<script type="module" src="app.js"></script>
+<script type="module" src="newsletter.js"></script>
 </body>
 </html>

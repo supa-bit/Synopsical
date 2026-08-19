@@ -1,0 +1,17 @@
+#!/bin/sh
+# Synopsical pre-push safety net. Runs scripts/check.mjs (JS syntax, every
+# $('id')/getElementById('id') resolves to a real element, every import and
+# every local <script src>/<link href> target exists) and the tests/*.test.mjs
+# unit tests, blocking the push if either fails.
+#
+# Not enabled by default — git doesn't auto-run hooks from a cloned repo
+# for anyone until they opt in, once, per clone:
+#   git config core.hooksPath .githooks
+#
+# To push without running it just this once: git push --no-verify
+
+set -e
+echo "Running scripts/check.mjs before push…"
+node scripts/check.mjs
+echo "Running tests/*.test.mjs before push…"
+node --test tests/*.test.mjs

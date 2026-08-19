@@ -11,11 +11,18 @@ with the data moved out of the browser and into a real database.
 | `index.html` | The page |
 | `style.css` | Look and feel — seven themes built in |
 | `app.js` | Everything the app does |
+| `lib/*.mjs` | Pure logic pulled out of `app.js` so it can be unit-tested — see "Testing" below |
 | `config.js` | **You edit this** — your two Supabase keys go here |
 | `supabase-schema.sql` | Database setup — run once |
 | `supabase-schema-02-profiles.sql` | Adds the multi-user/plan foundation — run once, after the first |
 | `CNAME` | Tells GitHub Pages to serve this site at synopsical.com |
 | `email-templates/*.html` | Paste into Supabase's email settings — never served by the app itself |
+| `package.json` | No dependencies, nothing to `npm install` — just marks `app.js`/`newsletter.js` as ES modules for Node, and gives `npm test`/`npm run check` somewhere to live |
+| `tests/*.test.mjs` | Unit tests for `lib/*.mjs` — see "Testing" below |
+| `scripts/serve.mjs` | `npm start` — local dev server, needed now that `app.js` is a module (see "Changing it later" below) |
+| `scripts/check.mjs` | Pre-push structural sanity check — see "Before pushing" below |
+| `.githooks/pre-push` | Runs `check.mjs` + the tests automatically on `git push`, once enabled |
+| `.github/workflows/check.yml` | Runs the same two in GitHub Actions on every push |
 
 ---
 
@@ -171,8 +178,105 @@ wakes it up again. If you outgrow the free tier you get plenty of warning.
 
 ## Changing it later
 
-Edit the files and re-upload them. GitHub Pages redeploys within a minute or
-two. There is no build step and nothing to install.
+Edit the files, commit, and `git push`. GitHub Pages redeploys from `main`
+within a minute or two. There is no build step and nothing to install.
+
+**Testing a change locally: don't just open `index.html` directly anymore.**
+`app.js` is now `type="module"` (see "Testing" below), and browsers refuse
+to load a module script from a `file://` URL — it'll show a blank or broken
+app with a CORS error in the console, even though the exact same file works
+fine once GitHub Pages serves it over `https://`. Run a real local server
+instead, one command, nothing to install:
+
+```
+npm start
+```
+
+Then open the `http://localhost:8080/` it prints — not the file path.
+(`info.html` and `pricing.html` don't load `app.js`, so those two still
+open fine directly from disk if you only need to check one of them.)
+
+## Before pushing
+
+There's no build step, no bundler, and no TypeScript — which means nothing
+automatically stops a typo or a broken reference from going straight to the
+live site the moment it's pushed, unless something's specifically set up to
+catch it. Two things are:
+
+**`scripts/check.mjs`** — a zero-dependency Node script that catches
+structural breakage:
+
+- a JS syntax error in `app.js`, `newsletter.js`, `config.js`, or `lib/*.mjs`
+- a `$('some-id')` / `getElementById('some-id')` call in the JS with no
+  matching `id="some-id"` anywhere in the HTML (and not created at runtime
+  by the JS itself)
+- an `import '...'` in the JS pointing at a module file that isn't there
+- a `<script src="…">` or `<link href="…">` pointing at a local file that
+  isn't actually there
+- a duplicate `id` in the same HTML file
+
+**`tests/*.test.mjs`** (`npm test`, or `node --test tests/*.test.mjs`) —
+real unit tests for the pure logic that's been pulled out of `app.js` into
+`lib/*.mjs` (see "Testing" below). Structural checks can't tell you the
+import parser still handles a blank line in the middle of a header block
+correctly; these do.
+
+Run either directly any time:
+
+```
+node scripts/check.mjs
+```
+
+```
+node --test tests/*.test.mjs
+```
+
+Or enable both as a `git push` hook, once per clone, so they run
+automatically and block a bad push:
+
+```
+git config core.hooksPath .githooks
+```
+
+(`git push --no-verify` skips it for one push if you ever need to.)
+
+Both also run in GitHub Actions on every push to `main`
+(`.github/workflows/check.yml`) — this doesn't block the Pages deploy
+(Pages redeploys off the push itself, independent of this), but it does
+put a red/green check on the commit so a broken push is visible on GitHub
+even if it slipped past the local hook.
+
+Neither catches everything — there's no substitute for actually opening the
+app and clicking through a change — but together they close the gap where a
+plain typo, a rename-and-forget-the-other-half-of-it, or a quietly-wrong
+edge case in the parsing logic silently ships.
+
+## Testing
+
+`app.js` is one large classic-script file that calls `boot()` the moment it
+loads — great for the browser, impossible to unit test directly, since
+importing it would also boot the whole app (Supabase client, auth, DOM
+wiring included). The fix isn't a bundler, it's native ES modules, which
+browsers have supported natively for years:
+
+- Pure, side-effect-free logic — parsing, formatting, scoring, anything
+  that's just data in and data out — lives in its own file under `lib/`,
+  exported normally (`export function ...`).
+- `app.js` imports it (`import { thing } from './lib/thing.mjs'`), and its
+  `<script>` tag in `index.html` is `type="module"` so the browser's native
+  `import` resolves it. No bundler, no build step — this is just what ES
+  modules are.
+- `tests/*.test.mjs` imports the exact same file directly, using Node's
+  built-in `node:test` (no test framework dependency either), and tests it
+  in complete isolation from the DOM/Supabase/the rest of the app.
+
+`lib/import-parser.mjs` (the Import screen's text → draft parsing) is the
+first piece done this way — see `tests/import-parser.test.mjs` for the
+pattern. The plan is to keep doing this incrementally as each area gets
+touched anyway, rather than as one big refactor: next time you're in the
+tag/category logic, the export logic, the link-suggestion scoring, etc.,
+that's the moment to pull the pure part of it into `lib/` and give it real
+tests, not a separate project on its own.
 
 ## If something goes wrong
 

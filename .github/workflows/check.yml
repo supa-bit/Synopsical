@@ -1,0 +1,23 @@
+name: Checks
+
+# Doesn't block the GitHub Pages deploy -- Pages redeploys straight off
+# pushes to main independently of this. What this buys instead: a
+# red/green status on every commit (visible on GitHub, and as a check on
+# any PR if this repo ever uses one) saying whether the thing that just
+# went live passed scripts/check.mjs. Currently the only way to know
+# that is to run it locally.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check.mjs
+      - run: node --test tests/*.test.mjs

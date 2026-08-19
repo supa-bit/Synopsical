@@ -15,6 +15,10 @@
 
 'use strict';
 
+// Pure text-parsing logic lives outside this file on purpose, so it can be
+// unit-tested without booting the whole app — see lib/import-parser.mjs.
+import { parseImportBlock, parseImportText } from './lib/import-parser.mjs';
+
 /* ── Tiny DOM helpers ──────────────────────────────────────────── */
 
 function el(tag, props = {}, children = []) {
@@ -1073,9 +1077,12 @@ async function viewForm(editId) {
    field-by-field editor — for bringing in content written somewhere
    else, or several entries in one go. Reuses Data.save() exactly as
    viewForm() does, rather than a separate insert path, so imported
-   entries are never a second-class kind of row in the database. */
+   entries are never a second-class kind of row in the database.
 
-const IMPORT_HEADER_RE = /^(Title|Category|Subcategory|Tags|Summary|Source|Field)\s*:\s*(.*)$/i;
+   The actual text -> draft parsing (parseImportBlock/parseImportText)
+   lives in lib/import-parser.mjs, not here — pulled out into its own
+   module so it can be unit-tested without booting the whole app. See
+   tests/import-parser.test.mjs and the README's "Before pushing" section. */
 
 /**
  * Handed to the user via "Copy AI prompt" on the import screen. Written so
@@ -1116,61 +1123,6 @@ WHAT TO WRITE
 Replace this section with your own title(s) and a short description of what each entry should cover — one per line if you want more than one, e.g.:
 Byzantine Iconoclasm: the two periods of imperial bans on religious icons in the Byzantine Empire
 Mycorrhizal Networks: how fungal networks let trees share nutrients and signals`;
-
-/**
- * One block of pasted text -> one draft entry. Recognized header lines
- * only count while contiguous from the very start of the block; the
- * first line that doesn't match ends the header, and everything after it
- * becomes the body untouched. A block with no recognized header at all
- * still gets a title — taken from its own first line, since guessing a
- * category from prose isn't honest, so that's left blank for the preview
- * screen to flag instead of inventing one.
- */
-function parseImportBlock(block) {
-  const lines = block.split('\n');
-  const draft = {
-    title: '', category: '', subcategory: '', tags: [], summary: '', source: '', fields: [], body: '',
-    _include: true,
-  };
-  let i = 0;
-  while (i < lines.length) {
-    const m = lines[i].match(IMPORT_HEADER_RE);
-    if (!m) break;
-    const key = m[1].toLowerCase();
-    const value = m[2].trim();
-    if (key === 'title') draft.title = value;
-    else if (key === 'category') draft.category = value;
-    else if (key === 'subcategory') draft.subcategory = value;
-    else if (key === 'summary') draft.summary = value;
-    else if (key === 'source') draft.source = value;
-    else if (key === 'tags') draft.tags = value.split(',').map((t) => t.trim()).filter(Boolean);
-    else if (key === 'field') {
-      const eq = value.indexOf('=');
-      if (eq > -1) draft.fields.push({ name: value.slice(0, eq).trim(), value: value.slice(eq + 1).trim() });
-    }
-    i++;
-  }
-  const rest = lines.slice(i).join('\n').trim();
-  if (draft.title) {
-    draft.body = rest;
-  } else {
-    const restLines = rest.split('\n');
-    draft.title = (restLines[0] ?? '').trim();
-    draft.body = restLines.slice(1).join('\n').trim();
-  }
-  return draft;
-}
-
-/** Splits on any line that's just three-or-more dashes, however it's
- *  padded — at the start, middle, or end of the paste — then parses each
- *  surviving block. One block with no delimiter at all is one entry. */
-function parseImportText(text) {
-  return text
-    .split(/^[ \t]*-{3,}[ \t]*$/m)
-    .map((b) => b.trim())
-    .filter(Boolean)
-    .map(parseImportBlock);
-}
 
 function viewImport() {
   const panel = el('div', { class: 'panel' });

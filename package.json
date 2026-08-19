@@ -1,0 +1,11 @@
+{
+  "name": "synopsical",
+  "private": true,
+  "type": "module",
+  "description": "No build step, no dependencies -- this file exists only so Node treats app.js/newsletter.js as ES modules (matching the browser's <script type=\"module\">) and to give `npm test` a home. Nothing here is installed or bundled into what ships to the browser.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}
