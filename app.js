@@ -2083,6 +2083,15 @@ function paintAuth(mode = 'signin') {
   $('auth-confirm-wrap').hidden = !isSignup;
   if (!isSignup) $('auth-password-confirm').value = '';
 
+  // Same hidden+required pairing as above -- the checkbox has to actually
+  // block submission at signup (real, informed consent, not just a line
+  // of text next to the button), but must never block sign-in/forgot,
+  // where it's hidden. Reset to unchecked leaving signup too, so
+  // switching away and back never carries over a stale "agreed" state.
+  $('auth-legal-wrap').hidden = !isSignup;
+  $('auth-privacy-check').required = isSignup;
+  if (!isSignup) $('auth-privacy-check').checked = false;
+
   // Forgot-password mode needs only the email field — no password to sign
   // in with yet. Clearing `required` here matters: a hidden-but-required
   // field silently blocks form submission (the browser's native validation

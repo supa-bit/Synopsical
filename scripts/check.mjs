@@ -24,7 +24,7 @@ import { join, dirname, relative, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const HTML_FILES = ['index.html', 'info.html', 'pricing.html'];
+const HTML_FILES = ['index.html', 'info.html', 'pricing.html', 'privacy.html'];
 const LIB_FILES = existsSync(join(ROOT, 'lib'))
   ? readdirSync(join(ROOT, 'lib')).filter((f) => f.endsWith('.mjs')).map((f) => `lib/${f}`)
   : [];

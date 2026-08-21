@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
+  <!-- Proves to Google Search Console that this domain is owned by
+       whoever can edit this file -- part of getting synopsical.com
+       actually indexed, not a feature of the app itself. Safe to leave
+       here indefinitely; removing it would just make Search Console
+       ask to reverify. -->
+  <meta name="google-site-verification" content="NRDPFPWho14BJJ5Ek63UwuzVjNY2zxechJl97eEKRrk" />
   <meta name="description" content="Synopsical is a personal, cloud-synced compendium — write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
   <!-- No og:image/twitter:image yet — a real 1200x630 OG image needs
        actual design work neither of us can produce well from here, so
@@ -48,6 +54,7 @@
     <nav class="home-nav">
       <a class="home-nav-link" href="info.html">Info</a>
       <a class="home-nav-link" href="pricing.html">Pricing</a>
+      <a class="home-nav-link" href="privacy.html">Privacy</a>
       <button class="home-nav-link" type="button" id="home-signin">Sign in</button>
     </nav>
   </header>
@@ -177,6 +184,7 @@
       <nav class="home-footer-nav">
         <a href="info.html">Info</a>
         <a href="pricing.html">Pricing</a>
+        <a href="privacy.html">Privacy</a>
       </nav>
     </div>
   </footer>
@@ -210,6 +218,19 @@
     </div>
 
     <div id="auth-error" class="auth-error" role="alert" hidden></div>
+
+    <!-- Only meaningful at signup -- hidden/required both toggled in
+         paintAuth() (app.js), the same way auth-confirm-wrap and the
+         forgot-password required-flip already work: a hidden-but-required
+         field silently blocks submission, so the JS has to flip both
+         together rather than relying on CSS alone. -->
+    <div class="auth-legal" id="auth-legal-wrap" hidden>
+      <label class="auth-legal-check">
+        <input type="checkbox" id="auth-privacy-check">
+        I agree to Synopsical's
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+      </label>
+    </div>
 
     <button class="btn btn-primary auth-submit" type="submit" id="auth-submit">
       Sign in

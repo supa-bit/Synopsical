@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="What Synopsical collects, why, who it's shared with, and how to see or delete your data.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Synopsical">
+  <meta property="og:url" content="https://synopsical.com/privacy.html">
+  <meta property="og:title" content="Privacy — Synopsical">
+  <meta property="og:description" content="What Synopsical collects, why, who it's shared with, and how to see or delete your data.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Privacy — Synopsical">
+  <meta name="twitter:description" content="What Synopsical collects, why, who it's shared with, and how to see or delete your data.">
+  <title>Privacy — Synopsical</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Prose for this page only -- reuses the site's own tokens (no new
+       colors introduced), just styled for long-form reading instead of
+       the short marketing copy the rest of homepage.* covers. */
+    .legal-wrap { max-width: 640px; }
+    .legal-updated {
+      font-family: var(--font-mono); font-size: 0.8rem; color: var(--text3);
+      margin: -8px 0 40px;
+    }
+    .legal-body h2 {
+      font-family: var(--font-body); font-weight: 800; font-size: 1.4rem;
+      color: var(--text0); margin: 44px 0 14px;
+    }
+    .legal-body h2:first-child { margin-top: 0; }
+    .legal-body p { font-size: 1rem; color: var(--text2); line-height: 1.75; margin: 0 0 16px; }
+    .legal-body ul { margin: 0 0 16px; padding-left: 1.2em; }
+    .legal-body li { font-size: 1rem; color: var(--text2); line-height: 1.7; margin-bottom: 8px; }
+    .legal-body strong { color: var(--text0); font-weight: 700; }
+    .legal-body a { color: var(--accent); }
+    .legal-summary {
+      border: 1px solid var(--border2); border-radius: var(--radius-lg);
+      background: var(--bg1); padding: 22px 26px; margin-bottom: 8px;
+    }
+    .legal-summary p { color: var(--text1); margin: 0 0 10px; }
+    .legal-summary p:last-child { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+
+<div id="homepage">
+  <header class="home-header">
+    <a class="home-wordmark" href="index.html" style="text-decoration:none;">SYNOPSICAL</a>
+    <nav class="home-nav">
+      <a class="home-nav-link" href="info.html">Info</a>
+      <a class="home-nav-link" href="pricing.html">Pricing</a>
+      <a class="home-nav-link" href="privacy.html">Privacy</a>
+      <a class="home-nav-link" href="index.html#/sign-in">Sign in</a>
+    </nav>
+  </header>
+
+  <div class="home-wrap">
+    <section class="home-hero legal-wrap" style="padding-bottom: 0;">
+      <div class="home-eyebrow">Privacy</div>
+      <h1 class="home-headline" style="font-size: clamp(2.1rem, 5vw, 3.2rem);">What we collect, and why.</h1>
+      <p class="legal-updated">Last updated: 21 August 2026</p>
+
+      <div class="legal-body">
+        <div class="legal-summary">
+          <p><strong>The short version:</strong> Synopsical stores what you type into your own compendium — that's the whole product. Signing in needs an email and password. Entries are private to your account. Generating "related entries" suggestions sends an entry's text to one outside AI provider. Subscribing to the newsletter shares only your email with the service that sends it. There's no advertising, no analytics, and nothing is sold to anyone.</p>
+          <p>Everything below is the specific, complete version of that.</p>
+        </div>
+
+        <h2>What we collect</h2>
+        <p><strong>To create an account:</strong> an email address and a password. The password is never stored in readable form — Supabase, the database service Synopsical runs on, handles that using standard secure hashing, and we never see or store the plain password ourselves.</p>
+        <p><strong>What you write:</strong> entry titles, categories, tags, summaries, body text, custom fields, links between entries, and anything you upload — faceplate images and custom font files. This is the actual content of your compendium, and it's private to your account by default; nothing you write is shown to other users or made public by the app.</p>
+        <p><strong>If you subscribe to the newsletter:</strong> just an email address. Subscribing doesn't require an account, and isn't linked to one if you already have one.</p>
+
+        <h2>Who else sees it</h2>
+        <p><strong>Supabase</strong> hosts the database, file storage, and sign-in system Synopsical runs on. Your account and entries live there. This is the one service everything ultimately runs through.</p>
+        <p><strong>OpenRouter</strong> is used for exactly one feature: suggesting related entries by meaning, not just shared tags. When that runs, an entry's title, tags, summary, and body text are sent to OpenRouter's API to generate what's called an "embedding" — a mathematical representation of the text's meaning, used only to compare entries against each other. The text itself isn't stored by OpenRouter beyond processing the request, based on their own provider terms.</p>
+        <p><strong>Resend</strong> is used only for sending emails — the newsletter (if you subscribe) and account emails like sign-up confirmation and password resets. It sees the relevant email address and nothing else.</p>
+        <p><strong>Google Fonts</strong> supplies the typefaces used across the site. Loading a font makes a direct request to Google's servers, which — like any request to any server — includes technical details such as your IP address. No account or content data is sent as part of this.</p>
+        <p>Nobody's information is sold, rented, or shared with anyone beyond the services above, and those are used only to run the features described here.</p>
+
+        <h2>Cookies and local storage</h2>
+        <p>Synopsical doesn't use cookies, and doesn't run any analytics or advertising trackers. Staying signed in works through your browser's own local storage, on your device only — it's how the app remembers you between visits, and it isn't something we can read or access remotely.</p>
+
+        <h2>Your control over your data</h2>
+        <p>Two controls exist for exactly this, both directly in the app, both immediate — neither is a support ticket:</p>
+        <ul>
+          <li><strong>Export everything</strong> — one file with every entry, field, tag, and link, in a plain, portable format. Available any time from the sidebar.</li>
+          <li><strong>Delete my account</strong> — available in Settings. This permanently removes your entries, tags, links, settings, and profile, and clears any uploaded images and fonts. It cannot be undone, which is why the app asks you to confirm before it runs.</li>
+        </ul>
+        <p>If you'd rather have this done for you, or have any other question about your data, reach out at <a href="mailto:admin@synopsical.com">admin@synopsical.com</a>.</p>
+
+        <h2>Children</h2>
+        <p>Synopsical isn't directed at children, and we don't knowingly collect information from anyone under 13.</p>
+
+        <h2>Changes to this policy</h2>
+        <p>If this page changes in any meaningful way, the date at the top will be updated. Continuing to use Synopsical after a change means you've accepted the update.</p>
+
+        <h2>Contact</h2>
+        <p>Questions about any of this: <a href="mailto:admin@synopsical.com">admin@synopsical.com</a>.</p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="home-footer">
+    <div class="home-wrap home-newsletter-row">
+      <div>
+        <div class="home-newsletter-label">Get occasional updates — new features, nothing else.</div>
+        <form id="newsletter-form" class="home-newsletter-form">
+          <input type="email" id="newsletter-email" class="input" placeholder="you@example.com" required>
+          <button type="submit" class="btn btn-sm">Subscribe</button>
+        </form>
+        <span id="newsletter-msg" class="hint home-newsletter-msg" hidden></span>
+      </div>
+    </div>
+    <div class="home-wrap">
+      <div>Synopsical — a personal compendium.</div>
+      <nav class="home-footer-nav">
+        <a href="info.html">Info</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="privacy.html">Privacy</a>
+      </nav>
+    </div>
+  </footer>
+</div>
+<script src="config.js"></script>
+<script src="newsletter.js"></script>
+</body>
+</html>
