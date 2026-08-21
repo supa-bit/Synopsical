@@ -90,15 +90,24 @@
       </div>
 
       <div class="home-proof">
+        <!-- Drawn/positioned by homepage.js -- see its comment for why
+             this isn't done in plain CSS (the three cards below are a
+             wrapping flex row, so their exact positions aren't known
+             until layout runs, and change on resize). -->
+        <svg class="home-proof-connector" aria-hidden="true"></svg>
+
         <div class="home-proof-card">
+          <div class="home-proof-node" aria-hidden="true"></div>
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
                 <defs><path id="home-ring1" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
-                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
-                <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
-                  <textPath href="#home-ring1" startOffset="2">HISTORY…</textPath>
-                </text>
+                <g class="home-proof-stamp-ring">
+                  <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
+                  <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
+                    <textPath href="#home-ring1" startOffset="2">HISTORY…</textPath>
+                  </text>
+                </g>
                 <text x="30" y="35" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="12" fill="#0a29fa">HIS</text>
               </svg>
             </div>
@@ -112,14 +121,17 @@
         </div>
 
         <div class="home-proof-card">
+          <div class="home-proof-node" aria-hidden="true"></div>
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
                 <defs><path id="home-ring2" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
-                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
-                <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
-                  <textPath href="#home-ring2" startOffset="2">BIOLOGY…</textPath>
-                </text>
+                <g class="home-proof-stamp-ring">
+                  <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
+                  <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
+                    <textPath href="#home-ring2" startOffset="2">BIOLOGY…</textPath>
+                  </text>
+                </g>
                 <text x="30" y="34" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="10.5" fill="#0a29fa">BIO</text>
               </svg>
             </div>
@@ -133,14 +145,17 @@
         </div>
 
         <div class="home-proof-card">
+          <div class="home-proof-node" aria-hidden="true"></div>
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
                 <defs><path id="home-ring3" d="M6,30 A24,24 0 1,1 54,30" fill="none"/></defs>
-                <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
-                <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
-                  <textPath href="#home-ring3" startOffset="2">PHYSICS…</textPath>
-                </text>
+                <g class="home-proof-stamp-ring">
+                  <circle cx="30" cy="30" r="18.5" fill="none" stroke="#0a29fa" stroke-width="0.8" opacity="0.5"/>
+                  <text font-family="var(--font-mono)" font-size="6" fill="#0a29fa" letter-spacing="2">
+                    <textPath href="#home-ring3" startOffset="2">PHYSICS…</textPath>
+                  </text>
+                </g>
                 <text x="30" y="35" text-anchor="middle" font-family="var(--font-body)" font-weight="700" font-size="11" fill="#0a29fa">1687</text>
               </svg>
             </div>
