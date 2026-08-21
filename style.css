@@ -83,10 +83,19 @@ button, input, textarea, select { font: inherit; color: inherit; }
   /* A faint dot grid instead of the glow-blob background this used to
      have -- graph-paper/index-card texture, on-subject for a catalogue,
      and (unlike 30 random radial gradients) cheap enough not to think
-     twice about. */
+     twice about. This is also the fallback: homepage.js replaces it with
+     a live <canvas> version of the same grid (see .home-bg-live below)
+     when it can, but if JS is off/blocked/errors, this static version
+     is what stays -- same look either way, just not interactive. */
   background-image: radial-gradient(circle at 1px 1px, var(--mkt-rule) 1.2px, transparent 0);
   background-size: 30px 30px;
 }
+/* homepage.js adds this once its <canvas> is actually up and drawing --
+   not on .mkt-js alone, so a canvas/JS failure still leaves the plain
+   CSS grid above visible rather than nothing. */
+#homepage.home-bg-live { background-image: none; }
+.home-bg-canvas { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
+
 .home-wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
 @media (max-width: 640px) { .home-wrap { padding: 0 18px; } }
 
