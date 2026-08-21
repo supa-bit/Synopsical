@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>document.documentElement.classList.add('mkt-js');</script>
   <link rel="icon" href="favicon.ico" sizes="32x32">
   <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -54,7 +55,7 @@
       </div>
 
       <div class="pricing-grid">
-        <div class="pricing-card">
+        <div class="pricing-card mkt-reveal">
           <div class="pricing-tier-name">Free</div>
           <div class="pricing-price">$0</div>
           <ul class="pricing-list">
@@ -68,8 +69,8 @@
           <a class="btn btn-primary" href="index.html#/sign-up">Start your compendium</a>
         </div>
 
-        <div class="pricing-card featured">
-          <div class="pricing-tier-name">Plus <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); font-weight: 400;">— prototype</span></div>
+        <div class="pricing-card featured mkt-reveal">
+          <div class="pricing-tier-name">Plus <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--mkt-ink-faint); font-weight: 400;">— prototype</span></div>
           <div class="pricing-price">—<span class="unit">pricing not set</span></div>
           <ul class="pricing-list">
             <li>Everything in Free</li>
@@ -106,5 +107,6 @@
 </div>
 <script src="config.js"></script>
 <script src="newsletter.js"></script>
+<script src="homepage.js"></script>
 </body>
 </html>

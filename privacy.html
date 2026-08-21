@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>document.documentElement.classList.add('mkt-js');</script>
   <link rel="icon" href="favicon.ico" sizes="32x32">
   <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -24,29 +25,30 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="style.css">
   <style>
-    /* Prose for this page only -- reuses the site's own tokens (no new
-       colors introduced), just styled for long-form reading instead of
-       the short marketing copy the rest of homepage.* covers. */
+    /* Prose for this page only -- reuses #homepage's --mkt-* tokens (see
+       style.css), just styled for long-form reading instead of the short
+       marketing copy the rest of homepage.* covers. */
     .legal-wrap { max-width: 640px; }
     .legal-updated {
-      font-family: var(--font-mono); font-size: 0.8rem; color: var(--text3);
+      font-family: var(--font-mono); font-size: 0.8rem; color: var(--mkt-ink-faint);
       margin: -8px 0 40px;
     }
     .legal-body h2 {
       font-family: var(--font-body); font-weight: 800; font-size: 1.4rem;
-      color: var(--text0); margin: 44px 0 14px;
+      color: var(--mkt-ink); margin: 44px 0 14px;
     }
     .legal-body h2:first-child { margin-top: 0; }
-    .legal-body p { font-size: 1rem; color: var(--text2); line-height: 1.75; margin: 0 0 16px; }
+    .legal-body p { font-size: 1rem; color: var(--mkt-ink-dim); line-height: 1.75; margin: 0 0 16px; }
     .legal-body ul { margin: 0 0 16px; padding-left: 1.2em; }
-    .legal-body li { font-size: 1rem; color: var(--text2); line-height: 1.7; margin-bottom: 8px; }
-    .legal-body strong { color: var(--text0); font-weight: 700; }
-    .legal-body a { color: var(--accent); }
+    .legal-body li { font-size: 1rem; color: var(--mkt-ink-dim); line-height: 1.7; margin-bottom: 8px; }
+    .legal-body strong { color: var(--mkt-ink); font-weight: 700; }
+    .legal-body a { color: var(--mkt-accent); }
     .legal-summary {
-      border: 1px solid var(--border2); border-radius: var(--radius-lg);
-      background: var(--bg1); padding: 22px 26px; margin-bottom: 8px;
+      border: 1px solid var(--mkt-rule); border-radius: var(--radius-lg);
+      background: var(--mkt-paper-raised); padding: 22px 26px; margin-bottom: 8px;
+      box-shadow: 0 1px 2px rgba(20,24,31,0.04), 0 8px 20px rgba(20,24,31,0.05);
     }
-    .legal-summary p { color: var(--text1); margin: 0 0 10px; }
+    .legal-summary p { color: var(--mkt-ink-dim); margin: 0 0 10px; }
     .legal-summary p:last-child { margin-bottom: 0; }
   </style>
 </head>
@@ -133,5 +135,6 @@
 </div>
 <script src="config.js"></script>
 <script src="newsletter.js"></script>
+<script src="homepage.js"></script>
 </body>
 </html>

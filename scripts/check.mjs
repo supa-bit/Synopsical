@@ -28,7 +28,7 @@ const HTML_FILES = ['index.html', 'info.html', 'pricing.html', 'privacy.html'];
 const LIB_FILES = existsSync(join(ROOT, 'lib'))
   ? readdirSync(join(ROOT, 'lib')).filter((f) => f.endsWith('.mjs')).map((f) => `lib/${f}`)
   : [];
-const JS_FILES = ['app.js', 'newsletter.js', 'config.js', ...LIB_FILES];
+const JS_FILES = ['app.js', 'newsletter.js', 'homepage.js', 'config.js', ...LIB_FILES];
 
 let failures = 0;
 const fail = (msg) => { console.log(`  ✗ ${msg}`); failures++; };
