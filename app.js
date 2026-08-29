@@ -19,6 +19,13 @@
 // unit-tested without booting the whole app — see lib/import-parser.mjs.
 import { parseImportBlock, parseImportText } from './lib/import-parser.mjs';
 
+// The rules every platform shares -- what an entry is, how it is validated,
+// and the one server call that saves it. These files are plain ES modules
+// with no build step, so the browser loads them directly, and React Native's
+// bundler loads the very same files for the iPhone and Android apps. That is
+// what keeps the three of them from drifting apart. See packages/core.
+import { createRepository, ConflictError } from './packages/core/src/repository.js';
+
 /* ── Tiny DOM helpers ──────────────────────────────────────────── */
 
 function el(tag, props = {}, children = []) {
@@ -86,12 +93,33 @@ const THEME_KEYS = [
 // which one reads legibly depends on whether a given preset's accent is
 // bright or dark, and a dark-accent preset (an earlier Card Catalog
 // iteration had one) needs the opposite of what every preset here needs.
-// All seven happen to use their own bg0 right now, since all seven accents
-// are currently bright/light — but this field exists, rather than every
-// preset just hardcoding bg0 in style.css, specifically so a future dark
-// accent doesn't quietly repeat that bug.
+// Folio below is the first one that actually needs this: its accent is a
+// deep, saturated blue rather than the pale-to-medium tones every other
+// preset uses, so accent_ink is white, not its own bg0 like the rest —
+// exactly the case this field exists for, rather than every preset just
+// hardcoding bg0 in style.css.
 const THEME_PRESETS = [
-  // Default as of the "Card Catalog" redesign. Ground moved off the
+  // Default as of the marketing-site redesign (index.html's public
+  // homepage, info/pricing/privacy). Same --mkt-* values from style.css's
+  // #homepage rules, carried into a real selectable theme so signing up
+  // doesn't hand you a completely different-looking product than the one
+  // that just pitched you on it. Bright paper ground instead of every
+  // other preset's dark one, on purpose — deliberately not the dark-navy/
+  // blue-accent look Card Catalog already owns, so this reads as its own
+  // thing, not a retheme of it. teal/coral/purple are new picks (not
+  // pulled from the marketing page, which never needed them) chosen
+  // against this specific ground: coral in particular reuses the exact
+  // red the marketing page reserved as its "second ink" but never
+  // actually used, so the whole system stays connected rather than
+  // inventing an unrelated fourth color. Every color here was checked
+  // against WCAG contrast minimums against bg0, not eyeballed — text3 in
+  // particular (4.61:1) is a genuine improvement over Card Catalog's own
+  // (3.84:1) and Parchment's (3.66:1), not just a match.
+  { name: 'Folio', bg0:'#f3f5f7', bg1:'#ffffff', bg2:'#eef1f4', bg3:'#e3e8ed', bg4:'#d3dae1',
+    border:'#dde2e8', border2:'#c3cbd4', text0:'#14181f', text1:'#333a45', text2:'#565f6e',
+    text3:'#65707d', accent:'#0a29fa', accent2:'#0821c9', teal:'#0e7a5f', coral:'#c23b2e', purple:'#6a4fc4',
+    accent_ink:'#ffffff' },
+  // Was the default before Folio (see above). Ground moved off the
   // original kraft-brown to a quiet, cool blue-black — direct feedback
   // was that brown read as "not eye-catching" once sky blue (itself
   // chosen from a side-by-side after a rust red called "horrendous" and
@@ -142,8 +170,8 @@ const FONT_STACKS = {
   whimsical: "'Fredoka', 'Comic Sans MS', sans-serif",
   lab: "'IBM Plex Mono', 'Cascadia Code', Consolas, monospace",
   commanding: "'Space Grotesk', 'Segoe UI', sans-serif",
-  // The Card Catalog default's pairing: a literary book-serif for titles and
-  // reading text, a quiet workhorse sans for UI chrome.
+  // The default pairing regardless of color theme: a literary book-serif
+  // for titles and reading text, a quiet workhorse sans for UI chrome.
   alegreya: "'Alegreya', Georgia, serif",
   worksans: "'Work Sans', 'Segoe UI', -apple-system, sans-serif",
 };
@@ -233,58 +261,37 @@ const Data = {
     return { fields: fields ?? [], tags: tags ?? [], links: links ?? [] };
   },
 
-  async save(draft, fields, tagList, linkList, editId) {
-    const row = {
-      title: draft.title,
-      category: draft.category,
-      subcategory: draft.subcategory || null,
-      summary: draft.summary || null,
-      body: draft.body || null,
-      source: draft.source || null,
-      faceplate_type: draft.fp.type,
-      faceplate_text: draft.fp.text || null,
-      faceplate_bg: draft.fp.bg,
-      faceplate_color: draft.fp.color,
-      faceplate_font: draft.fp.font,
-      faceplate_image: draft.fp.image || null,
-    };
+  // Delegates to the shared save_entry RPC in packages/core -- the exact
+  // same call the iPhone and Android apps make, so all three save an entry
+  // to mean the same thing. Three things changed by moving off the old
+  // hand-rolled sequence of update/delete/insert:
+  //
+  //   * It is ONE transaction. The old version could be interrupted between
+  //     deleting an entry's tags and inserting the new ones, leaving the
+  //     entry permanently stripped of its tags and links.
+  //
+  //   * Links keep their direction. The editor lists an entry's connections
+  //     without saying which way each arrow points, and the old save wrote
+  //     them all back out as outgoing -- so opening entry A and pressing
+  //     Save silently turned an existing B -> A link into A -> B, reversing
+  //     what its relation label meant.
+  //
+  //   * A save can no longer silently overwrite an edit made elsewhere.
+  //     The updated_at this browser last saw goes with the request, and the
+  //     server refuses the write if the row has moved on since. The caller
+  //     is expected to catch ConflictError and ask.
+  async save(draft, fields, tagList, linkList, editId, force = false) {
+    const base = editId
+      ? (State.entries.find((e) => e.id === editId)?.updated_at ?? null)
+      : null;
 
-    let id = editId;
-    if (editId) {
-      const { error } = await State.sb.from('entries').update(row).eq('id', editId);
-      if (error) throw error;
-    } else {
-      const { data, error } = await State.sb.from('entries').insert(row).select('id').single();
-      if (error) throw error;
-      id = data.id;
-    }
-
-    // Replace the satellite rows wholesale — simplest correct approach at
-    // this scale, and it matches what the original did.
-    await Promise.all([
-      State.sb.from('entry_fields').delete().eq('entry_id', id),
-      State.sb.from('tags').delete().eq('entry_id', id),
-      State.sb.from('links').delete().or(`from_entry_id.eq.${id},to_entry_id.eq.${id}`),
-    ]);
-
-    const cleanFields = fields
-      .filter((f) => f.name.trim())
-      .map((f, i) => ({ entry_id: id, field_name: f.name.trim(), field_value: f.value ?? '', sort_order: i }));
-    const cleanTags = [...new Set(tagList.map((t) => t.trim()).filter(Boolean))]
-      .map((tag) => ({ entry_id: id, tag }));
-    const cleanLinks = linkList
-      .filter((l) => l.id !== id)
-      .map((l) => ({ from_entry_id: id, to_entry_id: l.id, relation: l.relation || null }));
-
-    const jobs = [];
-    if (cleanFields.length) jobs.push(State.sb.from('entry_fields').insert(cleanFields));
-    if (cleanTags.length) jobs.push(State.sb.from('tags').insert(cleanTags));
-    if (cleanLinks.length) jobs.push(State.sb.from('links').insert(cleanLinks));
-    const results = await Promise.all(jobs);
-    for (const r of results) if (r.error) throw r.error;
-
-    return id;
+    const saved = await createRepository(State.sb).saveEntry(
+      { ...draft, id: editId ?? null, fields, tags: tagList, links: linkList },
+      { baseUpdatedAt: base, force }
+    );
+    return saved?.id ?? editId;
   },
+
 
   async remove(id) {
     const { error } = await State.sb.from('entries').delete().eq('id', id);
@@ -1043,10 +1050,31 @@ async function viewForm(editId) {
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
-      const id = await Data.save(
-        { ...F, title: F.title.trim(), category: F.category.trim() },
-        F.fields, F.tags, F.links, editId
-      );
+      const draft = { ...F, title: F.title.trim(), category: F.category.trim() };
+      let id;
+      try {
+        id = await Data.save(draft, F.fields, F.tags, F.links, editId);
+      } catch (err) {
+        // Somebody edited this entry somewhere else -- on a phone, or in
+        // another tab -- after this editor was opened. The server refused
+        // the write rather than letting it quietly replace their version,
+        // so the choice belongs to the person sitting here.
+        if (!(err instanceof ConflictError)) throw err;
+        const replace = await confirmDialog(
+          'Changed somewhere else',
+          `"${err.server?.title ?? 'This entry'}" was edited on another device after you opened it. `
+          + 'Saving now replaces that version with yours. Cancel instead to reload and see it first.',
+          'Replace it'
+        );
+        if (!replace) {
+          await Data.loadAll();
+          State.form = null;
+          go({ name: 'detail', id: editId });
+          toast('Reloaded the other version. Your changes were not saved.', true);
+          return;
+        }
+        id = await Data.save(draft, F.fields, F.tags, F.links, editId, true);
+      }
       State.form = null;
       await Data.loadAll();
       toast(existing ? 'Changes saved' : 'Entry created');
@@ -1538,8 +1566,8 @@ function viewSettings() {
   const fontRow = (labelText, key) => {
     const select = el('select', { class: 'select' });
     for (const [value, label] of [
-      ['alegreya', 'Alegreya (Card Catalog default)'],
-      ['worksans', 'Work Sans (Card Catalog default)'],
+      ['alegreya', 'Alegreya (default)'],
+      ['worksans', 'Work Sans (default)'],
       ['serif', 'Serif (Georgia)'],
       ['sans', 'Sans-serif'],
       ['mono', 'Monospace'],

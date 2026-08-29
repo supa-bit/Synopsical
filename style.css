@@ -3,11 +3,11 @@
 
    The theme presets swap the variables in :root, exactly as the original
    did. Everything below is written against those variables, so a theme
-   change never needs a code change. Card Catalog (a quiet, cool blue-black
-   ground, sky blue as the accent, red kept small but real as the second
-   ink — see the THEME_PRESETS comment in app.js for why) is the default —
-   these :root values match it, so there's no flash of an old theme before
-   applyTheme() runs on load.
+   change never needs a code change. Folio (a bright paper ground, deep
+   blue as the accent — same --mkt-* values the marketing site's own
+   #homepage rules use, see the THEME_PRESETS comment in app.js) is the
+   default — these :root values match it, so there's no flash of a
+   different theme before applyTheme() runs on load.
 
    --font-mono is structural, not one of the user-editable font slots in
    Settings — it's what call-numbers, tags and section labels are set in
@@ -16,13 +16,13 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg0: #141a24; --bg1: #1b2330; --bg2: #212b3a; --bg3: #283445; --bg4: #303e52;
-  --border: #34435a; --border2: #445674;
-  --text0: #eef1f6; --text1: #c7d0dd; --text2: #93a0b5; --text3: #6b7691;
-  --accent: #6f9bd1; --accent2: #4f7ab8; --accent-dim: #6f9bd122; --accent-ink: #141a24;
-  --teal: #5c7a52; --teal-dim: #5c7a5225;
-  --coral: #c1503d; --coral-dim: #c1503d25;
-  --purple: #5a6b8c; --purple-dim: #5a6b8c25;
+  --bg0: #f3f5f7; --bg1: #ffffff; --bg2: #eef1f4; --bg3: #e3e8ed; --bg4: #d3dae1;
+  --border: #dde2e8; --border2: #c3cbd4;
+  --text0: #14181f; --text1: #333a45; --text2: #565f6e; --text3: #65707d;
+  --accent: #0a29fa; --accent2: #0821c9; --accent-dim: #0a29fa22; --accent-ink: #ffffff;
+  --teal: #0e7a5f; --teal-dim: #0e7a5f25;
+  --coral: #c23b2e; --coral-dim: #c23b2e25;
+  --purple: #6a4fc4; --purple-dim: #6a4fc425;
 
   --font-ui: 'Work Sans', 'Segoe UI', -apple-system, sans-serif;
   --font-body: 'Alegreya', Georgia, serif;
