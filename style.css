@@ -93,7 +93,15 @@ button, input, textarea, select { font: inherit; color: inherit; }
 /* homepage.js adds this once its <canvas> is actually up and drawing --
    not on .mkt-js alone, so a canvas/JS failure still leaves the plain
    CSS grid above visible rather than nothing. */
-#homepage.home-bg-live { background-image: none; }
+/* transparent, not just background-image:none -- #homepage's own solid
+   background-color paints ON TOP of a negative-z-index fixed descendant
+   (that's just how CSS stacking order works: a stacking context's own
+   background paints after its negative-z-index children), so leaving
+   background-color set here would silently hide the canvas completely
+   behind an opaque paper-colored rectangle. The canvas fills its own
+   paper-color background every frame instead (see homepage.js draw()),
+   so it doesn't need #homepage's background at all once it's live. */
+#homepage.home-bg-live { background: transparent; }
 .home-bg-canvas { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 
 .home-wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }

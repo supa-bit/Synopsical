@@ -176,6 +176,7 @@
     if (ctx2d) {
       const canvas = ctx2d.canvas;
       const style = getComputedStyle(home);
+      const paperColor = style.getPropertyValue('--mkt-paper').trim() || '#f3f5f7';
       const dotColor = style.getPropertyValue('--mkt-rule').trim() || '#dde2e8';
       const accentColor = style.getPropertyValue('--mkt-accent-light').trim() || '#73a4f0';
 
@@ -202,7 +203,13 @@
       function draw() {
         const w = window.innerWidth, h = window.innerHeight;
         ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx2d.clearRect(0, 0, w, h);
+        // Fill, not clear -- the canvas owns the paper-color background
+        // now that #homepage's own is set to transparent once .home-bg-
+        // live is added (see that class's comment in style.css). A plain
+        // clearRect here would leave the canvas transparent and let
+        // body's own (dark, app-colored) background show through instead.
+        ctx2d.fillStyle = paperColor;
+        ctx2d.fillRect(0, 0, w, h);
 
         const offsetY = (window.scrollY * PARALLAX) % SPACING;
         const lit = [];
