@@ -209,38 +209,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .home-cta-secondary:hover { color: var(--mkt-ink); }
 
 .home-proof {
-  position: relative;
   display: flex; gap: 26px; flex-wrap: wrap;
   justify-content: center; padding: 24px 10px 8px;
 }
-/* Drawn by homepage.js (measures each card's node dot via
-   getBoundingClientRect, redraws on resize) -- only meaningful once the
-   three cards are actually sitting in a row, so it's the same 900px
-   cutoff as the hero flourish, and JS itself checks matchMedia before
-   ever drawing anything, not just this display:none. */
-.home-proof-connector { position: absolute; inset: 0; overflow: visible; pointer-events: none; z-index: 0; }
-@media (max-width: 900px) { .home-proof-connector { display: none; } }
 .home-proof-card {
-  position: relative; z-index: 1; width: 300px; background: var(--mkt-paper-raised);
+  position: relative; width: 300px; background: var(--mkt-paper-raised);
   border: 1px solid var(--mkt-rule); border-radius: 6px; padding: 20px 22px 22px;
   box-shadow: 0 1px 2px rgba(20,24,31,0.04), 0 8px 20px rgba(20,24,31,0.05);
   transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s ease, border-color 0.25s ease;
-}
-/* The little node dot each connector line anchors to -- same visual
-   language as the hero flourish's circles, so the motif reads as one
-   idea repeated, not two unrelated decorations. */
-.home-proof-node {
-  position: absolute; top: -6px; left: 18px; width: 9px; height: 9px;
-  border-radius: 50%; background: var(--mkt-accent); border: 2px solid var(--mkt-paper);
-}
-/* Drawn in by homepage.js: it sets the stroke-dashoffset="100" attribute
-   directly (lowest cascade priority, so it's overridden the instant this
-   class rule below applies), then adds this class a frame later -- the
-   CSS transition animates from that starting attribute value down to
-   this rule's 0, without needing to know the path's actual length. */
-.home-proof-connector-path {
-  transition: stroke-dashoffset 1s cubic-bezier(0.65,0,0.35,1);
-  stroke-dashoffset: 0;
 }
 
 /* Soft radial glow that tracks the cursor -- created by homepage.js,
