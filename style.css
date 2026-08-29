@@ -176,10 +176,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
   .home-feature-grid > div:nth-child(4) { transition-delay: 0.24s; }
 }
 @keyframes mkt-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes mkt-draw { to { stroke-dashoffset: 0; } }
-@keyframes mkt-pop { to { opacity: 1; transform: scale(1); } }
-@keyframes mkt-breathe { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-@keyframes mkt-node-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 @keyframes mkt-spin { to { transform: rotate(360deg); } }
 @keyframes mkt-cta-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(10,41,250,0.28), 0 10px 24px rgba(10,41,250,0.28); }
@@ -187,26 +183,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 
 .home-hero { padding: 6rem 0 3rem; position: relative; }
-.home-hero-flourish {
-  position: absolute; top: 10px; right: -6px; width: 190px; height: auto;
-  z-index: -1; pointer-events: none;
-}
-@media (max-width: 900px) { .home-hero-flourish { display: none; } }
 @media (prefers-reduced-motion: no-preference) {
-  /* Draw in once, then keep it feeling alive rather than going fully
-     static -- a slow overall breathe (the group, so it can't fight the
-     children's own transforms) plus each node getting its own gentle
-     pulse once it's finished popping in. */
-  .home-hero-flourish { animation: mkt-breathe 4.5s ease-in-out 1.7s infinite; }
-  .home-hero-flourish path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: mkt-draw 1.3s cubic-bezier(0.65,0,0.35,1) 0.3s forwards; }
-  .home-hero-flourish circle {
-    opacity: 0; transform-origin: center; transform: scale(0);
-    animation: mkt-pop 0.35s ease-out forwards, mkt-node-pulse 2.8s ease-in-out infinite;
-  }
-  .home-hero-flourish circle:nth-of-type(1) { animation-delay: 0.32s, 0.7s; }
-  .home-hero-flourish circle:nth-of-type(2) { animation-delay: 0.88s, 1.25s; }
-  .home-hero-flourish circle:nth-of-type(3) { animation-delay: 1.5s, 1.9s; }
-
   /* Primary hero CTA only (not every .btn-primary site-wide) -- a slow
      radiating ping to draw the eye, not a strobe. */
   .home-cta-row .btn-primary { animation: mkt-cta-pulse 2.8s ease-in-out 2.2s infinite; }
