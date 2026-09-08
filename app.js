@@ -206,7 +206,17 @@ const State = {
   user: null,
   entries: [],          // entries with their tags and link counts attached
   view: { name: 'list' },
-  settings: { theme: { ...THEME_PRESETS[0] }, fontUi: 'worksans', fontBody: 'alegreya', fontSize: 15, customFonts: [] },
+  settings: {
+    theme: { ...THEME_PRESETS[0] }, fontUi: 'worksans', fontBody: 'alegreya', fontSize: 15, customFonts: [],
+    // Per-element overrides — title/summary/tags/categories. All start
+    // unset (not '', not a font key) on purpose: applyTheme() only sets
+    // the matching CSS variable when one of these is truthy, and every
+    // selector that reads it falls back to --font-body/--font-ui/--font-mono
+    // when the variable was never set at all — see the "Fonts" comment
+    // above applyTheme(). So "unset" already looks exactly like it did
+    // before this feature existed, with no default value to keep in sync.
+    fontTitle: null, fontSummary: null, fontTags: null, fontCategories: null,
+  },
   form: null,           // working draft while the editor is open
   profile: null,        // { plan: 'free' | 'paid', ... } — null until loaded, or if
                          // supabase-schema-02-profiles.sql hasn't been run yet
@@ -441,6 +451,27 @@ function applyTheme() {
   ensureGoogleFont(State.settings.fontBody);
   root.style.setProperty('--font-ui', resolveFontStack(State.settings.fontUi));
   root.style.setProperty('--font-body', resolveFontStack(State.settings.fontBody));
+
+  // Per-element overrides (title/summary/tags/categories). Each is only
+  // ever set here when the person actually picked something — leaving a
+  // CSS variable *unset* is different from setting it to an empty string,
+  // and it's the unset case that matters: every selector in style.css
+  // that reads --font-title etc. is written as
+  //   font-family: var(--font-title, var(--font-body));
+  // so with nothing set, it falls through to exactly the font it already
+  // used before this feature existed. removeProperty() is what actually
+  // un-sets a custom property — setting it to '' would make var() treat
+  // it as "set to nothing" instead, which resolves as an invalid empty
+  // font-family, not a fallback.
+  for (const [cssVar, key] of [
+    ['--font-title', 'fontTitle'], ['--font-summary', 'fontSummary'],
+    ['--font-tags', 'fontTags'], ['--font-categories', 'fontCategories'],
+  ]) {
+    const chosen = State.settings[key];
+    if (chosen) { ensureGoogleFont(chosen); root.style.setProperty(cssVar, resolveFontStack(chosen)); }
+    else root.style.removeProperty(cssVar);
+  }
+
   // Every font-size in style.css is in rem, so this one line scales the
   // whole app's text — see the comment on `html` in style.css.
   root.style.fontSize = `${State.settings.fontSize ?? 15}px`;
@@ -801,7 +832,7 @@ async function viewDetail(id) {
   // The illuminated-capital treatment (see .body-text-lead in style.css)
   // goes on whichever block reads first — Summary if there is one, else
   // Notes — never both, so the page gets one drop cap, not a stack of them.
-  if (entry.summary) panel.append(section('Summary', el('div', { class: 'body-text body-text-lead', text: entry.summary })));
+  if (entry.summary) panel.append(section('Summary', el('div', { class: 'body-text body-text-lead entry-summary-text', text: entry.summary })));
   if (entry.body) panel.append(section('Notes', el('div', { class: 'body-text' + (entry.summary ? '' : ' body-text-lead'), text: entry.body })));
 
   if (fields.length) {
@@ -1338,10 +1369,14 @@ function faceplateBuilder(F) {
       controls.append(el('div', { class: 'fp-row' }, [el('span', { class: 'fp-label', text: 'Initials' }), textInput]));
       controls.append(colourRow('Text colour', 'color'));
     } else {
-      const fileInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
-      fileInput.addEventListener('change', async () => {
-        const file = fileInput.files?.[0];
+      // The actual upload, factored out to its own function rather than
+      // living inline in the file input's change handler — three different
+      // triggers (pick a file, drop a file, paste a file) all end up with
+      // nothing more than a File object, so they can all hand off to the
+      // exact same place instead of three near-copies of this logic.
+      const handleImageFile = async (file) => {
         if (!file) return;
+        if (!file.type.startsWith('image/')) { toast('That file isn’t an image', true); return; }
         if (file.size > 3 * 1024 * 1024) { toast('Please choose an image under 3 MB', true); return; }
         toast('Uploading…');
         try {
@@ -1352,12 +1387,57 @@ function faceplateBuilder(F) {
         } catch (err) {
           toast(err.message || 'Upload failed', true);
         }
-      });
+      };
+
+      const fileInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+      fileInput.addEventListener('change', () => handleImageFile(fileInput.files?.[0]));
+
       const pick = el('button', {
         class: 'btn btn-sm', type: 'button', onClick: () => fileInput.click(),
       }, F.fp.image ? 'Replace image' : 'Choose image');
+
+      // A real drop target, not just the file input — tabindex makes it
+      // focusable (a plain <div> can't normally receive keyboard focus or
+      // a paste event at all), and it's paste's turn once it has focus:
+      // click the zone, or click "Choose image" first, either puts focus
+      // here, and Ctrl+V then fires 'paste' on whatever currently has
+      // focus, which is exactly this element.
+      const dropzone = el('div', { class: 'fp-dropzone', tabindex: '0' }, [
+        el('span', { class: 'fp-dropzone-text' }, 'Drop an image, or paste one (Ctrl+V), or:'),
+        el('div', { class: 'fp-row', style: { marginTop: '8px' } }, [pick, fileInput]),
+      ]);
+
+      // dragover has to call preventDefault() — that's not incidental, it's
+      // literally how the Drag and Drop API decides whether an element is
+      // allowed to be a drop target at all. Without it, the browser's
+      // default behavior for a dropped file is to navigate away and open
+      // it, same as dragging a photo onto a browser tab from the desktop.
+      dropzone.addEventListener('dragover', (ev) => {
+        ev.preventDefault();
+        dropzone.classList.add('drag-active');
+      });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-active'));
+      dropzone.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        dropzone.classList.remove('drag-active');
+        handleImageFile(ev.dataTransfer?.files?.[0]);
+      });
+
+      // Clipboard paste hands over a list of "items" tagged with a MIME
+      // type, not files directly — an image copied from an image editor
+      // and one copied as a browser screenshot both show up as an item
+      // whose type starts with "image/", and .getAsFile() is what turns
+      // that item into the same kind of File object the other two paths
+      // already produce.
+      dropzone.addEventListener('paste', (ev) => {
+        const item = [...(ev.clipboardData?.items ?? [])].find((it) => it.type.startsWith('image/'));
+        if (!item) return; // let a normal text paste (if this ever holds text focus) through untouched
+        ev.preventDefault();
+        handleImageFile(item.getAsFile());
+      });
+
       const row = el('div', { class: 'fp-row' }, [
-        el('span', { class: 'fp-label', text: 'Image' }), pick, fileInput,
+        el('span', { class: 'fp-label', text: 'Image' }), dropzone,
       ]);
       if (F.fp.image) {
         row.append(el('button', {
@@ -1556,8 +1636,20 @@ function viewSettings() {
     el('div', { class: 'section-label', text: 'Theme' }), presets,
   ]));
 
-  const fontRow = (labelText, key) => {
+  // withDefault: true adds a "Match theme" option at the top, for the
+  // four per-element rows below — Interface/Reading don't get one,
+  // because they ARE the theme's own fonts; there's nothing for them to
+  // match. Its value is '', and current is normalized with `|| ''` so
+  // null/undefined (never having been set) selects it too, the same way
+  // applyTheme() treats any falsy value as "not overridden."
+  const fontRow = (labelText, key, withDefault = false) => {
     const select = el('select', { class: 'select' });
+    const current = State.settings[key] || '';
+    if (withDefault) {
+      const opt = el('option', { value: '', text: 'Match theme' });
+      if (current === '') opt.selected = true;
+      select.append(opt);
+    }
     for (const [value, label] of [
       ['alegreya', 'Alegreya (default)'],
       ['worksans', 'Work Sans (default)'],
@@ -1569,12 +1661,12 @@ function viewSettings() {
       ['commanding', 'Commanding (Space Grotesk)'],
     ]) {
       const opt = el('option', { value, text: label });
-      if (State.settings[key] === value) opt.selected = true;
+      if (current === value) opt.selected = true;
       select.append(opt);
     }
     for (const f of State.settings.customFonts ?? []) {
       const opt = el('option', { value: f.family, text: `${f.name} (uploaded)` });
-      if (State.settings[key] === f.family) opt.selected = true;
+      if (current === f.family) opt.selected = true;
       select.append(opt);
     }
     select.addEventListener('change', async () => {
@@ -1616,6 +1708,14 @@ function viewSettings() {
     el('div', { class: 'section-label', text: 'Fonts' }),
     el('div', { class: 'form-grid' }, [
       fontRow('Interface', 'fontUi'), fontRow('Reading', 'fontBody'),
+    ]),
+    el('div', { class: 'hint', style: { margin: '14px 0 8px' } },
+      'Override the font for one specific kind of text — leave any of these on "Match theme" to keep using Interface/Reading above.'),
+    el('div', { class: 'form-grid' }, [
+      fontRow('Titles', 'fontTitle', true),
+      fontRow('Summaries', 'fontSummary', true),
+      fontRow('Tags', 'fontTags', true),
+      fontRow('Categories', 'fontCategories', true),
     ]),
     fontSizeRow(),
   ]));
@@ -1750,6 +1850,12 @@ async function removeCustomFont(f) {
   State.settings.customFonts = (State.settings.customFonts ?? []).filter((x) => x.family !== f.family);
   if (State.settings.fontUi === f.family) State.settings.fontUi = 'serif';
   if (State.settings.fontBody === f.family) State.settings.fontBody = 'serif';
+  // The four overrides fall back to "Match theme" (null), not 'serif' —
+  // unlike fontUi/fontBody, they have a real "unset" state to fall back
+  // to instead of needing a hardcoded font of their own.
+  for (const key of ['fontTitle', 'fontSummary', 'fontTags', 'fontCategories']) {
+    if (State.settings[key] === f.family) State.settings[key] = null;
+  }
 
   try {
     await Data.saveSettings();
