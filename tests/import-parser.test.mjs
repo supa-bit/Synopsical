@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseImportBlock, parseImportText } from '../lib/import-parser.mjs';
+import { parseImportBlock, parseImportText, parseExportBundle } from '../lib/import-parser.mjs';
 
 test('parseImportBlock: all header fields recognized', () => {
   const d = parseImportBlock(
@@ -17,6 +17,7 @@ test('parseImportBlock: all header fields recognized', () => {
     + 'Summary: Two periods of imperial bans on religious icons.\n'
     + 'Source: https://example.com/iconoclasm\n'
     + 'Field: Duration = 726-842 AD\n'
+    + 'Link: Hagia Sophia | Apse mosaics reshaped\n'
     + '\n'
     + 'The body text goes here.\nAcross multiple lines.'
   );
@@ -27,6 +28,7 @@ test('parseImportBlock: all header fields recognized', () => {
   assert.equal(d.summary, 'Two periods of imperial bans on religious icons.');
   assert.equal(d.source, 'https://example.com/iconoclasm');
   assert.deepEqual(d.fields, [{ name: 'Duration', value: '726-842 AD' }]);
+  assert.deepEqual(d.links, [{ targetTitle: 'Hagia Sophia', relation: 'Apse mosaics reshaped' }]);
   assert.equal(d.body, 'The body text goes here.\nAcross multiple lines.');
   assert.equal(d._include, true);
 });
@@ -53,6 +55,12 @@ test('parseImportBlock: no recognized header at all -- first line becomes the ti
   assert.equal(d.title, 'Just a plain paste with no headers');
   assert.equal(d.category, '');
   assert.equal(d.body, 'Second line is body.\nThird line too.');
+});
+
+test('parseImportBlock: strips leading Markdown # heading from fallback first-line title', () => {
+  const d = parseImportBlock('# Mycorrhizal Networks\nSymbiotic fungal threads.');
+  assert.equal(d.title, 'Mycorrhizal Networks');
+  assert.equal(d.body, 'Symbiotic fungal threads.');
 });
 
 test('parseImportBlock: no header and only one line -- title set, body empty', () => {
@@ -120,4 +128,59 @@ test('parseImportText: blank/whitespace-only entries between delimiters are drop
 test('parseImportText: empty input produces no drafts', () => {
   assert.deepEqual(parseImportText(''), []);
   assert.deepEqual(parseImportText('   \n  '), []);
+});
+
+test('parseExportBundle & parseImportText: restores synopsical-export JSON bundle with fields, tags, and links', () => {
+  const bundle = {
+    format: 'synopsical-export',
+    version: 1,
+    entries: [
+      {
+        id: 'e1',
+        title: 'Principia Mathematica',
+        category: 'Physics',
+        subcategory: 'Mechanics',
+        summary: 'Three laws of motion.',
+        body: 'Published in 1687.',
+        source: 'Royal Society',
+        faceplate_type: 'text',
+        faceplate_text: '1687',
+        faceplate_bg: '#eef1f4',
+        faceplate_color: '#0a29fa',
+        faceplate_font: 'default',
+      },
+      {
+        id: 'e2',
+        title: 'Opticks',
+        category: 'Physics',
+        body: 'Published in 1704.',
+      },
+    ],
+    entry_fields: [
+      { entry_id: 'e1', field_name: 'Published', field_value: '1687', sort_order: 1 },
+      { entry_id: 'e1', field_name: 'Author', field_value: 'Isaac Newton', sort_order: 0 },
+    ],
+    tags: [
+      { entry_id: 'e1', tag: 'newton' },
+      { entry_id: 'e1', tag: 'gravitation' },
+    ],
+    links: [
+      { from_entry_id: 'e1', to_entry_id: 'e2', relation: 'Companion treatise' },
+    ],
+  };
+
+  const json = JSON.stringify(bundle);
+  const drafts = parseImportText(json);
+  assert.equal(drafts.length, 2);
+  assert.equal(drafts[0]._originalId, 'e1');
+  assert.equal(drafts[0].title, 'Principia Mathematica');
+  assert.deepEqual(drafts[0].fields, [
+    { name: 'Author', value: 'Isaac Newton' },
+    { name: 'Published', value: '1687' },
+  ]);
+  assert.deepEqual(drafts[0].tags, ['newton', 'gravitation']);
+  assert.deepEqual(drafts[0].links, [
+    { targetId: 'e2', targetTitle: 'Opticks', relation: 'Companion treatise' },
+  ]);
+  assert.equal(parseExportBundle('not json'), null);
 });

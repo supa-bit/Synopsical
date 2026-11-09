@@ -21,29 +21,25 @@
        ask to reverify. -->
   <meta name="google-site-verification" content="NRDPFPWho14BJJ5Ek63UwuzVjNY2zxechJl97eEKRrk" />
   <meta name="description" content="Synopsical is a personal, cloud-synced compendium — write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
-  <!-- No og:image/twitter:image yet — a real 1200x630 OG image needs
-       actual design work neither of us can produce well from here, so
-       this deliberately stays text-only (twitter:card "summary", not
-       "summary_large_image", which would show a broken/empty box
-       without an image) rather than shipping something half-done. -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Synopsical">
   <meta property="og:url" content="https://synopsical.com/">
   <meta property="og:title" content="Synopsical — keep an encyclopedia of your own">
   <meta property="og:description" content="Write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://synopsical.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Synopsical — keep an encyclopedia of your own">
   <meta name="twitter:description" content="Write entries on anything worth remembering, link them to each other, and find them again in seconds, from any device.">
-  <title>Synopsical</title>
-  <!-- Warms up the connection for the optional Google Fonts, which are
-       only actually fetched if someone picks one in Appearance settings. -->
+  <meta name="twitter:image" content="https://synopsical.com/og-image.png">
+  <title>Synopsical — A Personal Compendium</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- JetBrains Mono is structural, not optional — it's what --font-mono
-       resolves to everywhere (tags, call-numbers, section labels), so
-       unlike the fonts above this one always loads, the same way Georgia
-       never needed a webfont link. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Loads the default Folio pairing (Alegreya + Work Sans) alongside
+       structural JetBrains Mono upfront so logged-out visitors on the
+       marketing pages see the real typography, not system fallbacks. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;0,800;0,900;1,700&family=JetBrains+Mono:wght@400;500&family=Work+Sans:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -51,13 +47,7 @@
 <!-- Public homepage — genuinely visible in the raw HTML (no `hidden`),
      unlike every screen below it. That's the whole point: a crawler (or
      anyone with JS disabled/slow) sees real content immediately, not a
-     blank page that only fills in after JS decides what to show. JS hides
-     this and shows the signed-in app directly for a returning session
-     (see start()), or hides it and reveals #auth-screen when someone
-     clicks Sign in / Start your compendium (see wireHomepage()). A
-     returning signed-in visitor will see a brief flash of this before JS
-     swaps to the app — an accepted tradeoff of not having a real server
-     to decide this before the page ever reaches the browser. -->
+     blank page that only fills in after JS decides what to show. -->
 <div id="homepage">
   <header class="home-header">
     <div class="home-wordmark">SYNOPSICAL</div>
@@ -74,17 +64,21 @@
       <div class="home-eyebrow">A personal compendium</div>
       <h1 class="home-headline">Keep an encyclopedia of your own.</h1>
       <p class="home-subhead">
-        Write entries on anything worth remembering — history, biology, your own research,
-        the things you'd otherwise forget you ever learned. Tag them, link them to each
-        other, and find them again in seconds, from any device.
+        Write entries on anything worth remembering — history, biology, worldbuilding, your own
+        research, the things you'd otherwise forget you ever learned. Cross-reference them with
+        <code>[[wiki-links]]</code>, organize by category and custom fields, and find them again
+        in seconds, from any device.
       </p>
       <div class="home-cta-row">
         <button class="btn btn-primary" type="button" id="home-cta-start">Start your compendium</button>
+        <button class="btn home-cta-demo" type="button" id="home-cta-demo">Explore sample compendium →</button>
         <button class="home-cta-secondary" type="button" id="home-cta-signin">Already have one? Sign in</button>
       </div>
 
+      <div class="home-proof-hint">Click any sample entry below to open it inside the live compendium:</div>
+
       <div class="home-proof">
-        <div class="home-proof-card">
+        <div class="home-proof-card" role="button" tabindex="0" data-sample-id="sample-iconoclasm" aria-label="Open sample entry: Byzantine Iconoclasm">
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
@@ -101,13 +95,16 @@
             <div class="home-proof-title">Byzantine Iconoclasm</div>
           </div>
           <div class="home-proof-summary">Two periods of imperial bans on religious icons, driven by theology and provincial military pressure.</div>
-          <div class="home-proof-tags">
-            <span class="home-proof-tag">byzantine-empire</span>
-            <span class="home-proof-tag">theology</span>
+          <div class="home-proof-foot">
+            <div class="home-proof-tags">
+              <span class="home-proof-tag">byzantine-empire</span>
+              <span class="home-proof-tag">theology</span>
+            </div>
+            <span class="home-proof-open">Open →</span>
           </div>
         </div>
 
-        <div class="home-proof-card">
+        <div class="home-proof-card" role="button" tabindex="0" data-sample-id="sample-mycorrhiza" aria-label="Open sample entry: Mycorrhizal Networks">
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
@@ -124,13 +121,16 @@
             <div class="home-proof-title">Mycorrhizal Networks</div>
           </div>
           <div class="home-proof-summary">Symbiotic fungal threads linking tree root systems — sometimes called the "wood wide web."</div>
-          <div class="home-proof-tags">
-            <span class="home-proof-tag">mycology</span>
-            <span class="home-proof-tag">forest-ecology</span>
+          <div class="home-proof-foot">
+            <div class="home-proof-tags">
+              <span class="home-proof-tag">mycology</span>
+              <span class="home-proof-tag">forest-ecology</span>
+            </div>
+            <span class="home-proof-open">Open →</span>
           </div>
         </div>
 
-        <div class="home-proof-card">
+        <div class="home-proof-card" role="button" tabindex="0" data-sample-id="sample-principia" aria-label="Open sample entry: Principia Mathematica">
           <div class="home-proof-top">
             <div class="home-proof-stamp" aria-hidden="true">
               <svg viewBox="0 0 60 60" width="46" height="46">
@@ -147,9 +147,12 @@
             <div class="home-proof-title">Principia Mathematica</div>
           </div>
           <div class="home-proof-summary">Newton's 1687 work laying out the laws of motion and universal gravitation.</div>
-          <div class="home-proof-tags">
-            <span class="home-proof-tag">newton</span>
-            <span class="home-proof-tag">classical-mechanics</span>
+          <div class="home-proof-foot">
+            <div class="home-proof-tags">
+              <span class="home-proof-tag">newton</span>
+              <span class="home-proof-tag">classical-mechanics</span>
+            </div>
+            <span class="home-proof-open">Open →</span>
           </div>
         </div>
       </div>
@@ -161,26 +164,57 @@
       <div class="home-feature-grid">
         <div class="mkt-reveal">
           <div class="home-feature-title">Cross-referenced, like a real reference work</div>
-          <div class="home-feature-body">Link any entry to any other. Every page shows what it connects to, and what connects back — the way an actual encyclopedia cross-references itself, not a pile of disconnected notes.</div>
+          <div class="home-feature-body">Link any entry to any other — or type <code>[[Entry Title]]</code> inline while you write. Every page shows what it connects to, what connects back, and how the whole compendium fits together on an interactive link map.</div>
         </div>
         <div class="mkt-reveal">
           <div class="home-feature-title">Finds connections you didn't make</div>
-          <div class="home-feature-body">Related entries surface on their own — first by the tags and categories you already gave them, then by meaning once you've written enough for it to notice on its own.</div>
+          <div class="home-feature-body">Related entries surface on their own — first by shared tags, categories, and inline mentions, then by meaning once you've written enough for it to notice on its own.</div>
         </div>
         <div class="mkt-reveal">
           <div class="home-feature-title">Catalogued, not just saved</div>
-          <div class="home-feature-body">Categories, tags, and your own custom fields — organized the way an actual archive is kept, not the way a folder of loose files accumulates.</div>
+          <div class="home-feature-body">Categories, tags, structured custom fields, and sources — organized the way an actual archive is kept, not the way a folder of loose files accumulates.</div>
         </div>
         <div class="mkt-reveal">
-          <div class="home-feature-title">Yours to look at</div>
-          <div class="home-feature-body">Pick a theme, upload your own fonts, give each entry its own faceplate. It doesn't have to look like everyone else's notes app, because it isn't one.</div>
+          <div class="home-feature-title">Yours to look at — and yours to keep</div>
+          <div class="home-feature-body">Pick from eight themes, upload your own fonts, give each entry its own faceplate, and export or restore your entire compendium in JSON or Markdown whenever you want.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-usecases">
+      <div class="home-eyebrow">Who keeps a compendium</div>
+      <h2 class="home-features-h2">Built for people who keep track of things worth keeping.</h2>
+      <div class="home-usecase-grid">
+        <div class="home-usecase-card mkt-reveal">
+          <div class="home-usecase-kicker">01 · Research &amp; Study</div>
+          <div class="home-usecase-title">Independent researchers, students &amp; autodidacts</div>
+          <p class="home-usecase-body">
+            Turn scattered reading notes into a permanent encyclopedia of historical periods, scientific mechanisms, papers, and primary sources — complete with dates, citations, and cross-references that hold up years later.
+          </p>
+        </div>
+        <div class="home-usecase-card mkt-reveal">
+          <div class="home-usecase-kicker">02 · Worldbuilding &amp; Lore</div>
+          <div class="home-usecase-title">Fiction writers, game designers &amp; tabletop GMs</div>
+          <p class="home-usecase-body">
+            Build a living lore bible for characters, factions, locations, magic systems, and timelines. Give every entry an emblem faceplate, structured attributes, and trace every alliance or bloodline on the Link map.
+          </p>
+        </div>
+        <div class="home-usecase-card mkt-reveal">
+          <div class="home-usecase-kicker">03 · Personal Archives</div>
+          <div class="home-usecase-title">Collectors, synthesisers &amp; lifelong learners</div>
+          <p class="home-usecase-body">
+            Catalogue botanical specimens, architecture, film and book syntheses, or culinary references in a quiet reading room styled in your own typography — with 1-click AI-formatted bulk import and portable export.
+          </p>
         </div>
       </div>
     </section>
 
     <section class="home-closing mkt-reveal">
       <div class="home-closing-line">Your compendium is waiting to be started.</div>
-      <button class="btn btn-primary" type="button" id="home-cta-start-2">Start your compendium</button>
+      <div class="home-cta-row" style="margin-bottom: 0;">
+        <button class="btn btn-primary" type="button" id="home-cta-start-2">Start your compendium</button>
+        <button class="btn" type="button" id="home-cta-demo-2">Try the sample compendium</button>
+      </div>
     </section>
   </div>
 
@@ -206,8 +240,10 @@
   </footer>
 </div>
 
-<!-- Sign-in gate. Everything else stays hidden until there is a session. -->
-<div id="auth-screen" hidden>
+<!-- Sign-in gate. Everything else stays hidden until there is a session.
+     data-nosnippet prevents search engines from indexing hidden form/setup
+     text as part of the public homepage snippet. -->
+<div id="auth-screen" data-nosnippet hidden>
   <form id="auth-form" autocomplete="on">
     <h1 style="margin:0;"><button type="button" class="auth-logo" id="auth-logo-home">SYNOPSICAL</button></h1>
     <p class="auth-sub" id="auth-sub">Sign in to reach your entries.</p>
@@ -261,7 +297,7 @@
 </div>
 
 <!-- Shown when someone lands back here from a "confirm your email" link. -->
-<div id="verified-screen" hidden>
+<div id="verified-screen" data-nosnippet hidden>
   <div class="setup-card">
     <div class="verified-mark" aria-hidden="true">✓</div>
     <h1 class="auth-logo">SYNOPSICAL</h1>
@@ -272,11 +308,8 @@
   </div>
 </div>
 
-<!-- Shown when someone lands back here from a "reset your password" link.
-     Supabase signs them into a short-lived recovery session for this alone
-     (see the PASSWORD_RECOVERY listener in app.js) — this form's only job
-     is turning that into a new password via auth.updateUser(). -->
-<div id="reset-screen" hidden>
+<!-- Shown when someone lands back here from a "reset your password" link. -->
+<div id="reset-screen" data-nosnippet hidden>
   <form id="reset-form" class="setup-card" autocomplete="off">
     <h1 class="auth-logo">SYNOPSICAL</h1>
     <p class="auth-sub">Choose a new password.</p>
@@ -306,7 +339,7 @@
 </div>
 
 <!-- Shown when config.js has not been filled in yet. -->
-<div id="setup-screen" hidden>
+<div id="setup-screen" data-nosnippet hidden>
   <div class="setup-card">
     <h1 class="auth-logo">SYNOPSICAL</h1>
     <p>Almost there. Two things left:</p>
@@ -322,7 +355,18 @@
   </div>
 </div>
 
-<div id="app" hidden>
+<div id="app" data-nosnippet hidden>
+  <div id="demo-banner" class="demo-banner" hidden>
+    <div class="demo-banner-text">
+      <span class="demo-badge">Sample Mode</span>
+      <span>Exploring a live sample compendium — browse entries, test the link map, switch themes, or draft an entry.</span>
+    </div>
+    <div class="demo-banner-actions">
+      <button class="btn btn-sm btn-primary" type="button" id="demo-signup">Create free account</button>
+      <button class="btn btn-sm" type="button" id="demo-exit">← Homepage</button>
+    </div>
+  </div>
+
   <header id="topbar">
     <!-- Mobile-only: reveals the Browse/Categories/Tags drawer below 780px,
          where it no longer fits as a permanent column (see #sidebar). -->
@@ -370,7 +414,8 @@
     </div>
 
     <div class="side-foot">
-      <button class="btn btn-sm" id="btn-export" type="button">Export everything</button>
+      <button class="btn btn-sm" id="btn-export" type="button">Export JSON</button>
+      <button class="btn btn-sm" id="btn-export-md" type="button">Export Markdown</button>
     </div>
   </nav>
 
@@ -381,9 +426,9 @@
   </main>
 </div>
 
-<div id="toast" role="status" aria-live="polite" hidden></div>
+<div id="toast" role="status" aria-live="polite" data-nosnippet hidden></div>
 
-<div id="modal-overlay" hidden>
+<div id="modal-overlay" data-nosnippet hidden>
   <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h2 class="modal-title" id="modal-title"></h2>
     <p class="modal-body" id="modal-body"></p>
@@ -393,11 +438,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<!-- type="module": app.js now imports lib/import-parser.mjs, which native
-     ES modules support directly in the browser -- no bundler needed. Module
-     scripts run deferred (after the document is parsed), so newsletter.js
-     is also a module here to keep it running after app.js, same relative
-     order as before, rather than jumping ahead of it. -->
 <script type="module" src="app.js"></script>
 <script type="module" src="newsletter.js"></script>
 <script src="homepage.js"></script>
