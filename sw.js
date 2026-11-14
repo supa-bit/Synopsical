@@ -28,6 +28,8 @@ const APP_SHELL = [
   './apple-touch-icon.png',
   './icons/favicon-32.png',
   './icons/favicon-192.png',
+  './icons/favicon.svg',
+  './assets/synopsical-logo.svg',
   './assets/synopsical-logo.png',
 ];
 

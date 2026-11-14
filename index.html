@@ -8,11 +8,12 @@
        paint, not after, or there's a flash of visible-then-suddenly-
        hidden content while the page loads. -->
   <script>document.documentElement.classList.add('mkt-js');</script>
-  <link rel="icon" href="favicon.ico?v=brand2" sizes="32x32">
-  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=brand2">
-  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=brand2">
-  <link rel="icon" type="image/png" sizes="192x192" href="icons/favicon-192.png?v=brand2">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=brand2">
+  <link rel="icon" href="favicon.ico?v=brand3" sizes="32x32">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=brand3">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=brand3">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/favicon-192.png?v=brand3">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="icons/favicon.svg?v=brand3">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=brand3">
   <link rel="manifest" href="manifest.json">
   <meta name="color-scheme" content="dark light">
   <!-- Proves to Google Search Console that this domain is owned by
@@ -41,7 +42,7 @@
        structural JetBrains Mono upfront so logged-out visitors on the
        marketing pages see the real typography, not system fallbacks. -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;0,800;0,900;1,700&family=JetBrains+Mono:wght@400;500&family=Work+Sans:wght@400;600&display=swap">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=brand3">
 </head>
 <body>
 
@@ -51,7 +52,7 @@
      blank page that only fills in after JS decides what to show. -->
 <div id="homepage">
   <header class="home-header">
-    <a class="home-wordmark" href="index.html"><img class="brand-lockup" src="assets/synopsical-logo.png" alt="Synopsical" width="210" height="40"></a>
+    <a class="home-wordmark" href="index.html"><img class="brand-lockup" src="assets/synopsical-logo.svg" alt="Synopsical" width="1932" height="386"></a>
     <nav class="home-nav">
       <a class="home-nav-link" href="info.html">Info</a>
       <a class="home-nav-link" href="pricing.html">Pricing</a>
@@ -66,8 +67,8 @@
       <h1 class="home-headline">Keep an encyclopedia of your own.</h1>
       <p class="home-subhead">
         Write entries on anything worth remembering — history, biology, worldbuilding, your own
-        research, the things you'd otherwise forget you ever learned. Cross-reference them with
-        <code>[[wiki-links]]</code>, organize by category and custom fields, and find them again
+        research, the things you'd otherwise forget you ever learned. Cross-reference them right inside
+        your notes, organize by category and custom fields, and find them again
         in seconds, from any device.
       </p>
       <div class="home-cta-row">
@@ -165,7 +166,7 @@
       <div class="home-feature-grid">
         <div class="mkt-reveal">
           <div class="home-feature-title">Cross-referenced, like a real reference work</div>
-          <div class="home-feature-body">Link any entry to any other — or type <code>[[Entry Title]]</code> inline while you write. Every page shows what it connects to, what connects back, and how the whole compendium fits together on an interactive link map.</div>
+          <div class="home-feature-body">Link any entry to any other — or mention another entry right inside a sentence while you write. Every page shows what it connects to, what connects back, and how the whole compendium fits together on an interactive link map.</div>
         </div>
         <div class="mkt-reveal">
           <div class="home-feature-title">Finds connections you didn't make</div>
@@ -246,7 +247,7 @@
      text as part of the public homepage snippet. -->
 <div id="auth-screen" data-nosnippet hidden>
   <form id="auth-form" autocomplete="on">
-    <h1 style="margin:0;"><button type="button" class="auth-logo" id="auth-logo-home"><img class="brand-icon" src="icons/favicon-192.png" alt="" width="32" height="32">Synopsical</button></h1>
+    <h1 style="margin:0;"><button type="button" class="auth-logo" id="auth-logo-home"><img class="brand-icon" src="icons/favicon.svg" alt="" width="32" height="32">Synopsical</button></h1>
     <p class="auth-sub" id="auth-sub">Sign in to reach your entries.</p>
 
     <label class="field-label" for="auth-email">Email</label>
@@ -301,7 +302,7 @@
 <div id="verified-screen" data-nosnippet hidden>
   <div class="setup-card">
     <div class="verified-mark" aria-hidden="true">✓</div>
-    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon-192.png" alt="" width="32" height="32">Synopsical</h1>
+    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon.svg" alt="" width="32" height="32">Synopsical</h1>
     <p class="auth-sub" id="verified-sub">Your email is confirmed.</p>
     <button class="btn btn-primary auth-submit" type="button" id="verified-continue">
       Continue
@@ -312,7 +313,7 @@
 <!-- Shown when someone lands back here from a "reset your password" link. -->
 <div id="reset-screen" data-nosnippet hidden>
   <form id="reset-form" class="setup-card" autocomplete="off">
-    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon-192.png" alt="" width="32" height="32">Synopsical</h1>
+    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon.svg" alt="" width="32" height="32">Synopsical</h1>
     <p class="auth-sub">Choose a new password.</p>
 
     <label class="field-label" for="reset-password">New password</label>
@@ -342,7 +343,7 @@
 <!-- Shown when config.js has not been filled in yet. -->
 <div id="setup-screen" data-nosnippet hidden>
   <div class="setup-card">
-    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon-192.png" alt="" width="32" height="32">Synopsical</h1>
+    <h1 class="auth-logo"><img class="brand-icon" src="icons/favicon.svg" alt="" width="32" height="32">Synopsical</h1>
     <p>Almost there. Two things left:</p>
     <ol class="setup-steps">
       <li>Run <code>supabase-schema.sql</code> in your Supabase SQL Editor.</li>
@@ -373,7 +374,7 @@
          where it no longer fits as a permanent column (see #sidebar). -->
     <button class="btn btn-sm" id="btn-menu" type="button" aria-label="Open menu">☰</button>
     <button class="logo" id="nav-home" type="button">
-      <img class="brand-icon" src="icons/favicon-192.png" alt="" width="32" height="32">Synopsical<span id="stats-pill"></span>
+      <img class="brand-icon" src="icons/favicon.svg" alt="" width="32" height="32">Synopsical<span id="stats-pill"></span>
     </button>
 
     <div id="search-wrap">

@@ -100,7 +100,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   gap: 16px; flex-wrap: wrap;
 }
 .home-wordmark { display: inline-flex; text-decoration: none; flex-shrink: 0; }
-.brand-lockup { display: block; width: 210px; height: 40px; object-fit: cover; }
+.brand-lockup { display: block; width: 210px; max-width: 100%; height: auto; }
 .brand-icon { display: inline-block; width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; vertical-align: middle; }
 .home-nav { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .home-nav-link {
