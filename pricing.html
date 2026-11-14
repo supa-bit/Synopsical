@@ -10,19 +10,23 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="Synopsical's pricing plan — a preview of what's coming. Everything is free while the core product is still being built.">
+  <meta name="description" content="Synopsical's pricing plan — everything in the core compendium is free today, with Plus in development for publishing, typeset book export, and AI synthesis.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Synopsical">
   <meta property="og:url" content="https://synopsical.com/pricing.html">
   <meta property="og:title" content="Pricing — Synopsical">
-  <meta property="og:description" content="Synopsical's pricing plan — a preview of what's coming. Everything is free while the core product is still being built.">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:description" content="Synopsical's pricing plan — everything in the core compendium is free today, with Plus in development for publishing, typeset book export, and AI synthesis.">
+  <meta property="og:image" content="https://synopsical.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Pricing — Synopsical">
-  <meta name="twitter:description" content="Synopsical's pricing plan — a preview of what's coming. Everything is free while the core product is still being built.">
+  <meta name="twitter:description" content="Synopsical's pricing plan — everything in the core compendium is free today, with Plus in development for publishing, typeset book export, and AI synthesis.">
+  <meta name="twitter:image" content="https://synopsical.com/og-image.png">
   <title>Pricing — Synopsical</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;0,800;0,900;1,700&family=JetBrains+Mono:wght@400;500&family=Work+Sans:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -34,6 +38,7 @@
       <a class="home-nav-link" href="info.html">Info</a>
       <a class="home-nav-link" href="pricing.html">Pricing</a>
       <a class="home-nav-link" href="privacy.html">Privacy</a>
+      <a class="home-nav-link" href="index.html#/sample">Sample</a>
       <a class="home-nav-link" href="index.html#/sign-in">Sign in</a>
     </nav>
   </header>
@@ -43,42 +48,43 @@
       <div class="home-eyebrow">Pricing</div>
       <h1 class="home-headline" style="max-width: 16ch;">One plan today. A second one, eventually.</h1>
       <p class="home-subhead">
-        Synopsical is free to use right now, in full. This page is a preview of where
-        pricing is headed once there's enough built to justify asking for money for it —
-        not something you can buy yet.
+        Synopsical is free to use right now, in full. The core personal compendium will stay
+        generous and free; <strong>Plus</strong> is where public publishing, multi-page book
+        typesetting, and in-app AI synthesis will live once they ship.
       </p>
 
       <div class="pricing-banner">
         <span class="tag">Preview</span>
-        Nothing on this page is live. There's no billing, no card on file, no charge — the
-        second column is a prototype of a future plan, not a current option.
+        There's no billing, no card on file, and no charge today — the second column shows the
+        capabilities being built for Plus before billing is turned on.
       </div>
 
       <div class="pricing-grid">
         <div class="pricing-card mkt-reveal">
           <div class="pricing-tier-name">Free</div>
-          <div class="pricing-price">$0</div>
+          <div class="pricing-price">$0<span class="unit">forever for personal use</span></div>
           <ul class="pricing-list">
-            <li>Unlimited entries, categories and tags</li>
-            <li>Cross-references and link suggestions</li>
-            <li>Custom fields per entry</li>
-            <li>Themes, custom fonts, faceplates</li>
+            <li>Unlimited entries, categories, tags, and custom fields</li>
+            <li>Cross-references, inline <code>[[wiki-links]]</code>, and link suggestions</li>
+            <li>Interactive force-directed Link map with category filtering</li>
+            <li>Eight built-in themes, custom font uploads, and entry faceplates</li>
             <li>Cloud sync across every device</li>
-            <li>Export everything, any time</li>
+            <li>Full JSON backup &amp; restore, Markdown export, and print view</li>
           </ul>
           <a class="btn btn-primary" href="index.html#/sign-up">Start your compendium</a>
         </div>
 
         <div class="pricing-card featured mkt-reveal">
-          <div class="pricing-tier-name">Plus <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--mkt-ink-faint); font-weight: 400;">— prototype</span></div>
+          <div class="pricing-tier-name">Plus <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--mkt-ink-faint); font-weight: 400;">— in development</span></div>
           <div class="pricing-price">—<span class="unit">pricing not set</span></div>
           <ul class="pricing-list">
             <li>Everything in Free</li>
-            <li>Higher storage and entry limits</li>
-            <li>More custom font uploads</li>
-            <li>Priority on new features as they ship</li>
+            <li>Publish shareable entries or a public read-only compendium URL</li>
+            <li>In-app AI Archivist: draft structured entries directly from URLs or rough notes</li>
+            <li>Typeset Book Export: compile categories into a multi-page indexed PDF encyclopedia</li>
+            <li>Expanded cloud storage for high-resolution faceplate galleries and font families</li>
           </ul>
-          <a class="btn" href="#" aria-disabled="true" tabindex="-1">Not yet available</a>
+          <a class="btn" href="#" aria-disabled="true" tabindex="-1">In development — subscribe below for launch notice</a>
         </div>
       </div>
     </section>
@@ -106,7 +112,7 @@
   </footer>
 </div>
 <script src="config.js"></script>
-<script src="newsletter.js"></script>
+<script type="module" src="newsletter.js"></script>
 <script src="homepage.js"></script>
 </body>
 </html>

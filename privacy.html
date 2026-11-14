@@ -16,13 +16,17 @@
   <meta property="og:url" content="https://synopsical.com/privacy.html">
   <meta property="og:title" content="Privacy — Synopsical">
   <meta property="og:description" content="What Synopsical collects, why, who it's shared with, and how to see or delete your data.">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://synopsical.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Privacy — Synopsical">
   <meta name="twitter:description" content="What Synopsical collects, why, who it's shared with, and how to see or delete your data.">
+  <meta name="twitter:image" content="https://synopsical.com/og-image.png">
   <title>Privacy — Synopsical</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;0,800;0,900;1,700&family=JetBrains+Mono:wght@400;500&family=Work+Sans:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <style>
     /* Prose for this page only -- reuses #homepage's --mkt-* tokens (see
@@ -61,6 +65,7 @@
       <a class="home-nav-link" href="info.html">Info</a>
       <a class="home-nav-link" href="pricing.html">Pricing</a>
       <a class="home-nav-link" href="privacy.html">Privacy</a>
+      <a class="home-nav-link" href="index.html#/sample">Sample</a>
       <a class="home-nav-link" href="index.html#/sign-in">Sign in</a>
     </nav>
   </header>
@@ -95,7 +100,7 @@
         <h2>Your control over your data</h2>
         <p>Two controls exist for exactly this, both directly in the app, both immediate — neither is a support ticket:</p>
         <ul>
-          <li><strong>Export everything</strong> — one file with every entry, field, tag, and link, in a plain, portable format. Available any time from the sidebar.</li>
+          <li><strong>Export everything</strong> — one file with every entry, field, tag, and link, in a plain, portable format (JSON or Markdown). Available any time from the sidebar.</li>
           <li><strong>Delete my account</strong> — available in Settings. This permanently removes your entries, tags, links, settings, and profile, and clears any uploaded images and fonts. It cannot be undone, which is why the app asks you to confirm before it runs.</li>
         </ul>
         <p>If you'd rather have this done for you, or have any other question about your data, reach out at <a href="mailto:admin@synopsical.com">admin@synopsical.com</a>.</p>
@@ -134,7 +139,7 @@
   </footer>
 </div>
 <script src="config.js"></script>
-<script src="newsletter.js"></script>
+<script type="module" src="newsletter.js"></script>
 <script src="homepage.js"></script>
 </body>
 </html>

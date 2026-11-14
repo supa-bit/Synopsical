@@ -15,9 +15,11 @@
 
 'use strict';
 
-// Pure text-parsing logic lives outside this file on purpose, so it can be
-// unit-tested without booting the whole app — see lib/import-parser.mjs.
+// Pure text-parsing and formatting logic lives outside this file on purpose,
+// so it can be unit-tested without booting the whole app — see lib/*.mjs.
 import { parseImportBlock, parseImportText } from './lib/import-parser.mjs';
+import { parseRichBlocks, extractWikiLinks, entriesToMarkdown } from './lib/rich-text.mjs';
+import { cloneSampleCompendium } from './lib/sample-compendium.mjs';
 
 /* ── Tiny DOM helpers ──────────────────────────────────────────── */
 
@@ -81,51 +83,11 @@ const THEME_KEYS = [
   'text0','text1','text2','text3','accent','accent2','teal','coral','purple','accent_ink',
 ];
 
-// accent_ink is the text color .btn-primary sits on top of its accent fill
-// with — a separate field, not derived from bg0/text0 at paint time, because
-// which one reads legibly depends on whether a given preset's accent is
-// bright or dark, and a dark-accent preset (an earlier Card Catalog
-// iteration had one) needs the opposite of what every preset here needs.
-// Folio below is the first one that actually needs this: its accent is a
-// deep, saturated blue rather than the pale-to-medium tones every other
-// preset uses, so accent_ink is white, not its own bg0 like the rest —
-// exactly the case this field exists for, rather than every preset just
-// hardcoding bg0 in style.css.
 const THEME_PRESETS = [
-  // Default as of the marketing-site redesign (index.html's public
-  // homepage, info/pricing/privacy). Same --mkt-* values from style.css's
-  // #homepage rules, carried into a real selectable theme so signing up
-  // doesn't hand you a completely different-looking product than the one
-  // that just pitched you on it. Bright paper ground instead of every
-  // other preset's dark one, on purpose — deliberately not the dark-navy/
-  // blue-accent look Card Catalog already owns, so this reads as its own
-  // thing, not a retheme of it. teal/coral/purple are new picks (not
-  // pulled from the marketing page, which never needed them) chosen
-  // against this specific ground: coral in particular reuses the exact
-  // red the marketing page reserved as its "second ink" but never
-  // actually used, so the whole system stays connected rather than
-  // inventing an unrelated fourth color. Every color here was checked
-  // against WCAG contrast minimums against bg0, not eyeballed — text3 in
-  // particular (4.61:1) is a genuine improvement over Card Catalog's own
-  // (3.84:1) and Parchment's (3.66:1), not just a match.
   { name: 'Folio', bg0:'#f3f5f7', bg1:'#ffffff', bg2:'#eef1f4', bg3:'#e3e8ed', bg4:'#d3dae1',
     border:'#dde2e8', border2:'#c3cbd4', text0:'#14181f', text1:'#333a45', text2:'#565f6e',
     text3:'#65707d', accent:'#0a29fa', accent2:'#0821c9', teal:'#0e7a5f', coral:'#c23b2e', purple:'#6a4fc4',
     accent_ink:'#ffffff' },
-  // Was the default before Folio (see above). Ground moved off the
-  // original kraft-brown to a quiet, cool blue-black — direct feedback
-  // was that brown read as "not eye-catching" once sky blue (itself
-  // chosen from a side-by-side after a rust red called "horrendous" and
-  // a "denim" that read as too washed-out) was sitting on it. The actual
-  // fix wasn't a bolder ground, though — two saturated fields (a loud
-  // background AND a loud accent) compete rather than either one popping;
-  // a single accent reads as more "eye-catching" against a calm field
-  // than two competing hues do against each other. So: the ground stays
-  // quiet, and red gets a real but small role instead of a dominant
-  // one — it's the danger color already, and now also the second ink
-  // categoryStamp() (below) alternates with blue, instead of sage.
-  // Kept in the same THEME_KEYS shape as every other preset (see below)
-  // so the existing custom-color editor in Settings works on it unchanged.
   { name: 'Card Catalog', bg0:'#141a24', bg1:'#1b2330', bg2:'#212b3a', bg3:'#283445', bg4:'#303e52',
     border:'#34435a', border2:'#445674', text0:'#eef1f6', text1:'#c7d0dd', text2:'#93a0b5',
     text3:'#6b7691', accent:'#6f9bd1', accent2:'#4f7ab8', teal:'#5c7a52', coral:'#c1503d', purple:'#5a6b8c',
@@ -163,16 +125,10 @@ const FONT_STACKS = {
   whimsical: "'Fredoka', 'Comic Sans MS', sans-serif",
   lab: "'IBM Plex Mono', 'Cascadia Code', Consolas, monospace",
   commanding: "'Space Grotesk', 'Segoe UI', sans-serif",
-  // The default pairing regardless of color theme: a literary book-serif
-  // for titles and reading text, a quiet workhorse sans for UI chrome.
   alegreya: "'Alegreya', Georgia, serif",
   worksans: "'Work Sans', 'Segoe UI', -apple-system, sans-serif",
 };
 
-// The three new options above are hosted on Google Fonts — free to use
-// (all three are open-licensed) but not installed on anyone's computer, so
-// the actual font files have to be fetched. GOOGLE_FONTS maps each key to
-// the exact family/weight string Google's stylesheet endpoint expects.
 const GOOGLE_FONTS = {
   whimsical: 'Fredoka:wght@400;600',
   lab: 'IBM+Plex+Mono:wght@400;500;600',
@@ -181,14 +137,10 @@ const GOOGLE_FONTS = {
   worksans: 'Work+Sans:wght@400;600',
 };
 
-const _loadedFonts = new Set();
+// Alegreya and Work Sans are already loaded in <head> of index.html, so
+// pre-seed _loadedFonts to avoid injecting duplicate stylesheet <link>s.
+const _loadedFonts = new Set(['alegreya', 'worksans']);
 
-/**
- * Fetches a Google Font's stylesheet only the first time it's actually
- * selected. Loading all three upfront would cost every visitor a handful
- * of network requests for fonts most of them will never choose — this
- * keeps the page fast for everyone by default.
- */
 function ensureGoogleFont(key) {
   const spec = GOOGLE_FONTS[key];
   if (!spec || _loadedFonts.has(key)) return;
@@ -199,33 +151,55 @@ function ensureGoogleFont(key) {
   document.head.appendChild(link);
 }
 
+/**
+ * Returns default faceplate background and text colors matching the active
+ * theme (e.g. #eef1f4 and #0a29fa in Folio) instead of hardcoding old Ember
+ * colors on brand-new or imported entries.
+ */
+function defaultFaceplateColors() {
+  const t = State.settings.theme ?? THEME_PRESETS[0];
+  return {
+    bg: t.bg2 || '#eef1f4',
+    color: t.accent || '#0a29fa',
+  };
+}
+
 /* ── Application state ─────────────────────────────────────────── */
 
 const State = {
   sb: null,
   user: null,
+  demo: false,          // true while exploring the logged-out Sample Compendium
   entries: [],          // entries with their tags and link counts attached
+  links: [],
   view: { name: 'list' },
   settings: {
     theme: { ...THEME_PRESETS[0] }, fontUi: 'worksans', fontBody: 'alegreya', fontSize: 15, customFonts: [],
-    // Per-element overrides — title/summary/tags/categories. All start
-    // unset (not '', not a font key) on purpose: applyTheme() only sets
-    // the matching CSS variable when one of these is truthy, and every
-    // selector that reads it falls back to --font-body/--font-ui/--font-mono
-    // when the variable was never set at all — see the "Fonts" comment
-    // above applyTheme(). So "unset" already looks exactly like it did
-    // before this feature existed, with no default value to keep in sync.
     fontTitle: null, fontSummary: null, fontTags: null, fontCategories: null,
   },
   form: null,           // working draft while the editor is open
-  profile: null,        // { plan: 'free' | 'paid', ... } — null until loaded, or if
-                         // supabase-schema-02-profiles.sql hasn't been run yet
+  prefillNew: null,     // optional { title, linkFromId } when clicking an unresolved [[wiki-link]]
+  profile: null,
 };
 
 /* ── Data access ───────────────────────────────────────────────── */
 
 const Data = {
   async loadAll() {
+    if (State.demo) {
+      const linkCount = new Map();
+      for (const l of State.links ?? []) {
+        linkCount.set(l.from_entry_id, (linkCount.get(l.from_entry_id) ?? 0) + 1);
+        linkCount.set(l.to_entry_id, (linkCount.get(l.to_entry_id) ?? 0) + 1);
+      }
+      State.entries = (State.entries ?? []).map((e) => ({
+        ...e,
+        tags: [...(e.tags ?? [])].sort(),
+        linkCount: linkCount.get(e.id) ?? 0,
+      }));
+      return;
+    }
+
     const { data: entries, error } = await State.sb
       .from('entries').select('*').order('updated_at', { ascending: false });
     if (error) throw error;
@@ -255,6 +229,20 @@ const Data = {
   },
 
   async getDetail(id) {
+    if (State.demo) {
+      const entry = State.entries.find((e) => e.id === id);
+      const fields = (entry?.fields ?? []).map((f, i) => ({
+        field_name: f.field_name ?? f.name ?? '',
+        field_value: f.field_value ?? f.value ?? '',
+        sort_order: f.sort_order ?? i,
+      }));
+      const tags = (entry?.tags ?? []).map((t) => ({ entry_id: id, tag: t }));
+      const links = (State.links ?? []).filter(
+        (l) => l.from_entry_id === id || l.to_entry_id === id
+      );
+      return { fields, tags, links };
+    }
+
     const [{ data: fields }, { data: tags }, { data: links }] = await Promise.all([
       State.sb.from('entry_fields').select('*').eq('entry_id', id).order('sort_order'),
       State.sb.from('tags').select('*').eq('entry_id', id),
@@ -265,6 +253,52 @@ const Data = {
   },
 
   async save(draft, fields, tagList, linkList, editId) {
+    const cleanFields = fields
+      .filter((f) => f.name.trim())
+      .map((f, i) => ({ field_name: f.name.trim(), field_value: f.value ?? '', sort_order: i }));
+    const cleanTagStrings = [...new Set(tagList.map((t) => t.trim()).filter(Boolean))];
+
+    if (State.demo) {
+      const now = new Date().toISOString();
+      const id = editId || ('demo-' + crypto.randomUUID());
+      const row = {
+        id,
+        title: draft.title,
+        category: draft.category,
+        subcategory: draft.subcategory || null,
+        summary: draft.summary || null,
+        body: draft.body || null,
+        source: draft.source || null,
+        faceplate_type: draft.fp.type,
+        faceplate_text: draft.fp.text || null,
+        faceplate_bg: draft.fp.bg,
+        faceplate_color: draft.fp.color,
+        faceplate_font: draft.fp.font,
+        faceplate_image: draft.fp.image || null,
+        created_at: editId ? (State.entries.find((e) => e.id === editId)?.created_at ?? now) : now,
+        updated_at: now,
+        tags: cleanTagStrings,
+        fields: cleanFields,
+      };
+      if (editId) {
+        State.entries = State.entries.map((e) => (e.id === editId ? row : e));
+      } else {
+        State.entries = [row, ...State.entries];
+      }
+      State.links = (State.links ?? []).filter(
+        (l) => l.from_entry_id !== id && l.to_entry_id !== id
+      );
+      for (const l of linkList.filter((x) => x.id && x.id !== id)) {
+        State.links.push({
+          id: 'dlink-' + crypto.randomUUID(),
+          from_entry_id: id,
+          to_entry_id: l.id,
+          relation: l.relation || null,
+        });
+      }
+      return id;
+    }
+
     const row = {
       title: draft.title,
       category: draft.category,
@@ -298,17 +332,14 @@ const Data = {
       State.sb.from('links').delete().or(`from_entry_id.eq.${id},to_entry_id.eq.${id}`),
     ]);
 
-    const cleanFields = fields
-      .filter((f) => f.name.trim())
-      .map((f, i) => ({ entry_id: id, field_name: f.name.trim(), field_value: f.value ?? '', sort_order: i }));
-    const cleanTags = [...new Set(tagList.map((t) => t.trim()).filter(Boolean))]
-      .map((tag) => ({ entry_id: id, tag }));
+    const dbFields = cleanFields.map((f) => ({ entry_id: id, ...f }));
+    const cleanTags = cleanTagStrings.map((tag) => ({ entry_id: id, tag }));
     const cleanLinks = linkList
       .filter((l) => l.id !== id)
       .map((l) => ({ from_entry_id: id, to_entry_id: l.id, relation: l.relation || null }));
 
     const jobs = [];
-    if (cleanFields.length) jobs.push(State.sb.from('entry_fields').insert(cleanFields));
+    if (dbFields.length) jobs.push(State.sb.from('entry_fields').insert(dbFields));
     if (cleanTags.length) jobs.push(State.sb.from('tags').insert(cleanTags));
     if (cleanLinks.length) jobs.push(State.sb.from('links').insert(cleanLinks));
     const results = await Promise.all(jobs);
@@ -318,6 +349,13 @@ const Data = {
   },
 
   async remove(id) {
+    if (State.demo) {
+      State.entries = State.entries.filter((e) => e.id !== id);
+      State.links = (State.links ?? []).filter(
+        (l) => l.from_entry_id !== id && l.to_entry_id !== id
+      );
+      return;
+    }
     const { error } = await State.sb.from('entries').delete().eq('id', id);
     if (error) throw error;
   },
@@ -325,12 +363,21 @@ const Data = {
   async search(query) {
     const q = query.trim();
     if (!q) return [];
+    if (State.demo) {
+      const lower = q.toLowerCase();
+      return State.entries.filter((e) =>
+        (e.title ?? '').toLowerCase().includes(lower)
+        || (e.category ?? '').toLowerCase().includes(lower)
+        || (e.summary ?? '').toLowerCase().includes(lower)
+        || (e.body ?? '').toLowerCase().includes(lower)
+        || (e.tags ?? []).some((t) => t.toLowerCase().includes(lower))
+      );
+    }
     const { data, error } = await State.sb
       .from('entries').select('*')
       .textSearch('search_tsv', q, { type: 'websearch', config: 'english' })
       .limit(60);
     if (error) {
-      // websearch syntax can reject odd input; fall back to a plain scan.
       const { data: alt } = await State.sb
         .from('entries').select('*')
         .or(`title.ilike.%${q}%,body.ilike.%${q}%,summary.ilike.%${q}%,category.ilike.%${q}%`)
@@ -341,6 +388,7 @@ const Data = {
   },
 
   async loadSettings() {
+    if (State.demo) return;
     const { data } = await State.sb.from('settings').select('data').maybeSingle();
     if (data?.data && Object.keys(data.data).length) {
       State.settings = { ...State.settings, ...data.data };
@@ -348,20 +396,22 @@ const Data = {
   },
 
   async saveSettings() {
+    if (State.demo) return;
     const { error } = await State.sb.from('settings')
       .upsert({ owner_id: State.user.id, data: State.settings });
     if (error) throw error;
   },
 
-  // The row is created automatically by a database trigger the moment an
-  // account signs up (see supabase-schema-02-profiles.sql), so this is a
-  // read — the app never writes to `plan` itself.
   async loadProfile() {
+    if (State.demo) { State.profile = null; return; }
     const { data } = await State.sb.from('profiles').select('*').maybeSingle();
     State.profile = data ?? null;
   },
 
   async uploadFaceplate(file) {
+    if (State.demo) {
+      return URL.createObjectURL(file);
+    }
     const ext = (file.name.split('.').pop() || 'png').toLowerCase();
     const path = `${State.user.id}/${crypto.randomUUID()}.${ext}`;
     const { error } = await State.sb.storage.from('faceplates')
@@ -372,11 +422,14 @@ const Data = {
 
   async faceplateUrl(path) {
     if (!path) return null;
+    if (path.startsWith('blob:') || path.startsWith('data:')) return path;
+    if (State.demo) return null;
     const { data } = await State.sb.storage.from('faceplates').createSignedUrl(path, 3600);
     return data?.signedUrl ?? null;
   },
 
   async uploadFont(file) {
+    if (State.demo) throw new Error('Create a free account to upload custom font files');
     const ext = (file.name.split('.').pop() || 'ttf').toLowerCase();
     const path = `${State.user.id}/${crypto.randomUUID()}.${ext}`;
     const { error } = await State.sb.storage.from('fonts')
@@ -386,38 +439,27 @@ const Data = {
   },
 
   async fontUrl(path) {
-    if (!path) return null;
+    if (!path || State.demo) return null;
     const { data } = await State.sb.storage.from('fonts').createSignedUrl(path, 3600);
     return data?.signedUrl ?? null;
   },
 
-  // Fire-and-forget on purpose. This calls the embed-entry Edge Function,
-  // which is the only place the embeddings-provider API key ever exists —
-  // never in this file, never in the browser. A failure here (no key
-  // configured yet, provider hiccup) must never block or appear to break
-  // saving an entry, so callers should not let this reject their own flow.
   async requestEmbedding(entryId) {
+    if (State.demo) return;
     const { error } = await State.sb.functions.invoke('embed-entry', {
       body: { entryId },
     });
     if (error) throw error;
   },
 
-  // Permanently deletes the signed-in user's own account — see
-  // supabase/functions/delete-account/index.ts for what actually runs
-  // server-side. Every entries/tags/links/settings row (and profiles, if
-  // that migration has been run) cascades away automatically once the
-  // auth user is gone; this call is what makes that happen.
   async deleteAccount() {
+    if (State.demo) return;
     const { error } = await State.sb.functions.invoke('delete-account');
     if (error) throw error;
   },
 
-  // Semantic neighbours of one entry, via the related_entries() Postgres
-  // function — looks up that entry's own stored embedding and orders
-  // everything else in the account by vector distance to it. Returns
-  // nothing for entries that don't have an embedding yet.
   async relatedEntries(entryId, limit = 5) {
+    if (State.demo) return [];
     const { data, error } = await State.sb.rpc('related_entries', {
       target_id: entryId, limit_n: limit,
     });
@@ -426,11 +468,6 @@ const Data = {
   },
 };
 
-/* ── Plan / subscription check-point ─────────────────────────────
-   No paid features exist yet, so this always returns false today. The
-   point of having it now is that a future paid feature checks this one
-   function rather than every call site being rewritten later to learn
-   about plans at all. */
 function isPaidPlan() {
   return State.profile?.plan === 'paid';
 }
@@ -443,26 +480,15 @@ function applyTheme() {
   for (const key of THEME_KEYS) {
     if (t[key]) root.style.setProperty(`--${key.replace('_', '-')}`, t[key]);
   }
-  root.style.setProperty('--accent-dim', (t.accent ?? '#c9a84c') + '22');
-  root.style.setProperty('--teal-dim', (t.teal ?? '#5a9e8f') + '25');
-  root.style.setProperty('--coral-dim', (t.coral ?? '#c46a52') + '25');
-  root.style.setProperty('--purple-dim', (t.purple ?? '#8b7ec8') + '25');
+  root.style.setProperty('--accent-dim', (t.accent ?? '#0a29fa') + '22');
+  root.style.setProperty('--teal-dim', (t.teal ?? '#0e7a5f') + '25');
+  root.style.setProperty('--coral-dim', (t.coral ?? '#c23b2e') + '25');
+  root.style.setProperty('--purple-dim', (t.purple ?? '#6a4fc4') + '25');
   ensureGoogleFont(State.settings.fontUi);
   ensureGoogleFont(State.settings.fontBody);
   root.style.setProperty('--font-ui', resolveFontStack(State.settings.fontUi));
   root.style.setProperty('--font-body', resolveFontStack(State.settings.fontBody));
 
-  // Per-element overrides (title/summary/tags/categories). Each is only
-  // ever set here when the person actually picked something — leaving a
-  // CSS variable *unset* is different from setting it to an empty string,
-  // and it's the unset case that matters: every selector in style.css
-  // that reads --font-title etc. is written as
-  //   font-family: var(--font-title, var(--font-body));
-  // so with nothing set, it falls through to exactly the font it already
-  // used before this feature existed. removeProperty() is what actually
-  // un-sets a custom property — setting it to '' would make var() treat
-  // it as "set to nothing" instead, which resolves as an invalid empty
-  // font-family, not a fallback.
   for (const [cssVar, key] of [
     ['--font-title', 'fontTitle'], ['--font-summary', 'fontSummary'],
     ['--font-tags', 'fontTags'], ['--font-categories', 'fontCategories'],
@@ -472,18 +498,9 @@ function applyTheme() {
     else root.style.removeProperty(cssVar);
   }
 
-  // Every font-size in style.css is in rem, so this one line scales the
-  // whole app's text — see the comment on `html` in style.css.
   root.style.fontSize = `${State.settings.fontSize ?? 15}px`;
 }
 
-/**
- * Resolves a font key to an actual CSS font stack. Built-in keys (serif,
- * sans, mono, and the three Google-hosted options) come straight from
- * FONT_STACKS. Anything else is checked against the signed-in user's own
- * uploaded fonts — this is the one place a font choice actually becomes
- * usable CSS, so both the built-ins and custom uploads flow through here.
- */
 function resolveFontStack(key) {
   if (FONT_STACKS[key]) return FONT_STACKS[key];
   const custom = (State.settings.customFonts ?? []).find((f) => f.family === key);
@@ -491,12 +508,6 @@ function resolveFontStack(key) {
   return FONT_STACKS.serif;
 }
 
-/**
- * Keeps a single <style> tag containing an @font-face rule for every
- * installed custom font. Runs once at startup and again whenever a font
- * is added or removed. Signed URLs expire after an hour, same trade-off
- * already accepted for faceplate images — a page reload refreshes it.
- */
 async function applyCustomFontFaces() {
   const fonts = State.settings.customFonts ?? [];
   let styleEl = document.getElementById('custom-fonts-style');
@@ -516,8 +527,9 @@ async function applyCustomFontFaces() {
 /* ── Faceplate rendering ───────────────────────────────────────── */
 
 function faceplate(entry, size = 'sm') {
+  const defaults = defaultFaceplateColors();
   const node = el('div', { class: `faceplate fp-${size}`, 'aria-hidden': 'true' });
-  node.style.background = entry.faceplate_bg || '#28241c';
+  node.style.background = entry.faceplate_bg || defaults.bg;
 
   if (entry.faceplate_type === 'image' && entry.faceplate_image) {
     const img = el('img', { alt: '' });
@@ -526,51 +538,29 @@ function faceplate(entry, size = 'sm') {
     return node;
   }
 
-  node.style.color = entry.faceplate_color || '#c9a84c';
+  node.style.color = entry.faceplate_color || defaults.color;
   node.style.fontFamily = FONT_STACKS[entry.faceplate_font] ?? 'var(--font-body)';
   node.textContent = entry.faceplate_text || (entry.title || '?').slice(0, 2).toUpperCase();
   return node;
 }
 
-/* ── Category stamp ────────────────────────────────────────────────
-   A circular ink-stamp badge for an entry's category, used once — on the
-   detail page only, replacing the old flat pill there. Deliberately not
-   reused on every list card: the faceplate already owns that "circular
-   badge" role in a dense list, and a second circle per row would compete
-   with it rather than add anything.
-
-   Every node here is built with createElementNS + textContent, never a
-   template string. Category names are free text a user typed, and go
-   inside an SVG <textPath> — string-built SVG would reopen exactly the
-   injection path the top-of-file comment on this app already warns about
-   for entry titles. This keeps the same guarantee for categories.
-
-   The curved label follows a top-only semicircle (not a full circle) on
-   purpose: an earlier version used a closed ring, and long category names
-   wrapped past the top and rendered upside-down along the bottom half —
-   confirmed with a throwaway test page before writing this, not assumed. */
+/* ── Category stamp ──────────────────────────────────────────────── */
 function categoryStamp(category) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 60 60');
   svg.setAttribute('aria-hidden', 'true');
 
-  // Stable per-category choice between the theme's two "ink" colors, so
-  // the same category always lands on the same one across a visit. Blue
-  // and red, not blue and sage — sage stays the tag color everywhere else,
-  // but the stamp specifically is where red gets its small, real role
-  // instead of being confined to the danger button (see THEME_PRESETS).
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0;
   const varName = Math.abs(hash) % 2 === 0 ? '--accent' : '--coral';
   const ink = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-    || (varName === '--accent' ? '#6f9bd1' : '#c1503d');
+    || (varName === '--accent' ? '#0a29fa' : '#c23b2e');
 
   const ringId = `stampring-${Math.random().toString(36).slice(2, 9)}`;
   const defs = document.createElementNS(NS, 'defs');
   const path = document.createElementNS(NS, 'path');
   path.setAttribute('id', ringId);
-  // Top semicircle only (sweep-flag 1) — see comment above.
   path.setAttribute('d', 'M6,30 A24,24 0 1,1 54,30');
   path.setAttribute('fill', 'none');
   defs.append(path);
@@ -580,9 +570,6 @@ function categoryStamp(category) {
   ring2.setAttribute('fill', 'none'); ring2.setAttribute('stroke', ink);
   ring2.setAttribute('stroke-width', '0.8'); ring2.setAttribute('opacity', '0.5');
 
-  // Truncated to a length verified (via getStartPositionOfChar on the real
-  // path) to stay inside the top arc at this font-size/letter-spacing —
-  // longer than this and characters run off the end of the path.
   const label = category.length > 8 ? category.slice(0, 8).toUpperCase() + '…' : category.toUpperCase();
   const curvedText = document.createElementNS(NS, 'text');
   curvedText.setAttribute('font-family', 'var(--font-mono)');
@@ -593,7 +580,7 @@ function categoryStamp(category) {
   textPath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${ringId}`);
   textPath.setAttribute('href', `#${ringId}`);
   textPath.setAttribute('startOffset', '2');
-  textPath.textContent = label; // textContent — never markup — see comment above
+  textPath.textContent = label;
   curvedText.append(textPath);
 
   const abbrev = (category.match(/[A-Za-z]/g) || []).slice(0, 3).join('').toUpperCase() || '•';
@@ -610,20 +597,87 @@ function categoryStamp(category) {
   return el('div', { class: 'detail-stamp' }, [svg]);
 }
 
+/* ── Safe Rich-Text & [[Wiki-Link]] DOM Renderer ──────────────────
+   Builds structured headings, paragraphs, bullet lists, blockquotes,
+   and inline [[Entry Title]] cross-references strictly via el() and
+   textContent — never innerHTML. */
+function renderInlineNodes(tokens, currentEntryId) {
+  return tokens.map((tok) => {
+    if (tok.type === 'bold') return el('strong', { text: tok.text });
+    if (tok.type === 'italic') return el('em', { text: tok.text });
+    if (tok.type === 'code') return el('code', { text: tok.text });
+    if (tok.type === 'wikilink') {
+      const target = State.entries.find(
+        (e) => e.title.trim().toLowerCase() === tok.target.toLowerCase()
+      );
+      if (target) {
+        return el('button', {
+          class: 'wiki-link',
+          type: 'button',
+          title: `Open entry: ${target.title}`,
+          onClick: () => go({ name: 'detail', id: target.id }),
+        }, tok.label);
+      }
+      return el('button', {
+        class: 'wiki-link unresolved',
+        type: 'button',
+        title: `Create new entry: “${tok.target}”`,
+        onClick: () => {
+          State.form = null;
+          State.prefillNew = { title: tok.target, linkFromId: currentEntryId };
+          go({ name: 'new' });
+        },
+      }, tok.label);
+    }
+    return tok.text;
+  });
+}
+
+function renderRichBody(text, currentEntryId, extraClass = '') {
+  const blocks = parseRichBlocks(text);
+  const container = el('div', {
+    class: ('body-text rich-body ' + extraClass).trim(),
+  });
+  for (const b of blocks) {
+    if (b.type === 'heading') {
+      const tag = b.level === 2 ? 'h2' : 'h3';
+      container.append(
+        el(tag, { class: `rich-heading-${b.level}` }, renderInlineNodes(b.inlines, currentEntryId))
+      );
+    } else if (b.type === 'list') {
+      const ul = el('ul', { class: 'rich-list' });
+      for (const itemInlines of b.items) {
+        ul.append(el('li', {}, renderInlineNodes(itemInlines, currentEntryId)));
+      }
+      container.append(ul);
+    } else if (b.type === 'quote') {
+      const q = el('blockquote', { class: 'rich-quote' });
+      b.lines.forEach((lineTokens, idx) => {
+        if (idx > 0) q.append(el('br'));
+        for (const node of renderInlineNodes(lineTokens, currentEntryId)) q.append(node);
+      });
+      container.append(q);
+    } else if (b.type === 'paragraph') {
+      const p = el('p', { class: 'rich-para' });
+      b.lines.forEach((lineTokens, idx) => {
+        if (idx > 0) p.append(el('br'));
+        for (const node of renderInlineNodes(lineTokens, currentEntryId)) p.append(node);
+      });
+      container.append(p);
+    }
+  }
+  return container;
+}
+
 /* ── Navigation ────────────────────────────────────────────────── */
 
-/* Mobile drawer (see the 780px breakpoint in style.css) — #sidebar sits
- * fixed off-canvas there instead of being a permanent grid column, so it
- * needs an explicit open/closed state rather than just always being
- * visible. No-ops harmlessly above the breakpoint, where .open/the
- * backdrop are never shown regardless of this class/hidden state. */
 function setSidebarOpen(open) {
   $('sidebar').classList.toggle('open', open);
   $('sidebar-backdrop').hidden = !open;
 }
 
 function go(view) {
-  setSidebarOpen(false); // picking anywhere to go to should close the drawer
+  setSidebarOpen(false);
   State.view = view;
   const hash = view.name === 'detail' ? `#/entry/${view.id}`
     : view.name === 'edit' ? `#/edit/${view.id}`
@@ -635,9 +689,10 @@ function go(view) {
     : view.name === 'tag' ? `#/tag/${encodeURIComponent(view.tag)}`
     : view.name === 'recent' ? '#/recent'
     : view.name === 'search' ? `#/search?q=${encodeURIComponent(view.query)}`
+    : State.demo ? '#/sample'
     : '#/';
   if (window.location.hash !== hash) {
-    window.location.hash = hash;   // triggers hashchange → render
+    window.location.hash = hash;
   } else {
     render();
   }
@@ -745,6 +800,61 @@ function entryCard(entry) {
   return card;
 }
 
+async function loadStarterEntries(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Loading sample entries…';
+  try {
+    const { entries, links } = cloneSampleCompendium();
+    const idMap = new Map();
+    for (const sample of entries) {
+      const newId = await Data.save(
+        {
+          title: sample.title,
+          category: sample.category,
+          subcategory: sample.subcategory,
+          summary: sample.summary,
+          body: sample.body,
+          source: sample.source,
+          fp: {
+            type: sample.faceplate_type,
+            text: sample.faceplate_text,
+            bg: sample.faceplate_bg,
+            color: sample.faceplate_color,
+            font: sample.faceplate_font,
+            image: null,
+          },
+        },
+        sample.fields.map((f) => ({ name: f.field_name, value: f.field_value })),
+        sample.tags,
+        [],
+        null
+      );
+      idMap.set(sample.id, newId);
+      Data.requestEmbedding(newId).catch(() => {});
+    }
+    // Restore sample inter-entry links
+    if (!State.demo) {
+      const linkRows = links
+        .map((l) => ({
+          from_entry_id: idMap.get(l.from_entry_id),
+          to_entry_id: idMap.get(l.to_entry_id),
+          relation: l.relation || null,
+        }))
+        .filter((l) => l.from_entry_id && l.to_entry_id);
+      if (linkRows.length) {
+        await State.sb.from('links').insert(linkRows);
+      }
+    }
+    await Data.loadAll();
+    toast('Loaded 8 starter entries — edit or delete any of them as you go');
+    await render();
+  } catch (err) {
+    toast(err.message || 'Could not load starter entries', true);
+    btn.disabled = false;
+    btn.textContent = 'Load 8 sample entries';
+  }
+}
+
 function viewList(title, subtitle, entries, emptyText) {
   const panel = el('div', { class: 'panel' }, [
     el('div', { class: 'page-head' }, [
@@ -754,10 +864,29 @@ function viewList(title, subtitle, entries, emptyText) {
   ]);
 
   if (!entries.length) {
-    panel.append(el('div', { class: 'empty' }, [
+    const isTotalEmpty = State.entries.length === 0 && State.view.name === 'list';
+    const emptyBox = el('div', { class: 'empty' }, [
       el('div', { class: 'empty-title', text: 'Nothing here yet' }),
-      el('p', { text: emptyText ?? 'Create your first entry with the button above.' }),
-    ]));
+      el('p', {
+        text: emptyText ?? 'Start with a blank entry, import existing notes, or load a starter compendium to see how cross-references and the link map work.',
+      }),
+    ]);
+    if (isTotalEmpty) {
+      const starterBtn = el('button', { class: 'btn', type: 'button' }, 'Load 8 sample entries');
+      starterBtn.addEventListener('click', () => loadStarterEntries(starterBtn));
+      emptyBox.append(el('div', { class: 'empty-actions' }, [
+        el('button', {
+          class: 'btn btn-primary', type: 'button',
+          onClick: () => { State.form = null; go({ name: 'new' }); },
+        }, '+ New entry'),
+        starterBtn,
+        el('button', {
+          class: 'btn', type: 'button',
+          onClick: () => go({ name: 'import' }),
+        }, 'Import entries'),
+      ]));
+    }
+    panel.append(emptyBox);
   } else {
     for (const e of entries) panel.append(entryCard(e));
   }
@@ -795,8 +924,6 @@ async function viewDetail(id) {
         }),
       ]),
     ]),
-    // The category's own badge, moved out of the small meta text row and
-    // given the one circular "stamp" moment on the page — see categoryStamp().
     entry.category ? categoryStamp(entry.category) : null,
   ]));
 
@@ -805,6 +932,10 @@ async function viewDetail(id) {
       class: 'btn btn-primary', type: 'button',
       onClick: () => go({ name: 'edit', id }),
     }, 'Edit'),
+    el('button', {
+      class: 'btn', type: 'button',
+      onClick: () => window.print(),
+    }, 'Print / PDF'),
     el('button', {
       class: 'btn btn-danger', type: 'button',
       onClick: async () => {
@@ -829,11 +960,12 @@ async function viewDetail(id) {
   const section = (label, content) =>
     el('div', { class: 'section' }, [el('div', { class: 'section-label', text: label }), content]);
 
-  // The illuminated-capital treatment (see .body-text-lead in style.css)
-  // goes on whichever block reads first — Summary if there is one, else
-  // Notes — never both, so the page gets one drop cap, not a stack of them.
-  if (entry.summary) panel.append(section('Summary', el('div', { class: 'body-text body-text-lead entry-summary-text', text: entry.summary })));
-  if (entry.body) panel.append(section('Notes', el('div', { class: 'body-text' + (entry.summary ? '' : ' body-text-lead'), text: entry.body })));
+  if (entry.summary) {
+    panel.append(section('Summary', renderRichBody(entry.summary, id, 'body-text-lead entry-summary-text')));
+  }
+  if (entry.body) {
+    panel.append(section('Notes', renderRichBody(entry.body, id, entry.summary ? '' : 'body-text-lead')));
+  }
 
   if (fields.length) {
     const wrap = el('div');
@@ -860,12 +992,14 @@ async function viewDetail(id) {
 
   if (entry.source) panel.append(section('Source', el('div', { class: 'body-text', style: { fontSize: '13.5px' }, text: entry.source })));
 
+  const linkedIds = new Set();
   if (links.length) {
     const wrap = el('div');
     for (const l of links) {
       const otherId = l.from_entry_id === id ? l.to_entry_id : l.from_entry_id;
       const other = State.entries.find((e) => e.id === otherId);
       if (!other) continue;
+      linkedIds.add(otherId);
       wrap.append(el('button', {
         class: 'linked-entry', type: 'button',
         onClick: () => go({ name: 'detail', id: otherId }),
@@ -881,37 +1015,58 @@ async function viewDetail(id) {
     if (wrap.childElementCount) panel.append(section(`Linked entries (${wrap.childElementCount})`, wrap));
   }
 
-  // Silently skipped, not surfaced as an error, if supabase-schema-05
-  // hasn't been run yet or this entry has no embedding yet (brand new,
-  // or the embed-entry function isn't configured/deployed yet).
+  // Related entries: combines free, explainable tag/category overlap with
+  // semantic embedding similarity (when available) so every entry with
+  // neighbors in the compendium surfaces useful connections immediately.
   try {
-    const related = await Data.relatedEntries(id);
-    if (related.length) {
+    const myTags = new Set(tags.map((t) => t.tag.toLowerCase()));
+    const myCat = (entry.category ?? '').trim().toLowerCase();
+    const relatedItems = [];
+    const seenRelated = new Set([id, ...linkedIds]);
+
+    for (const other of State.entries) {
+      if (seenRelated.has(other.id)) continue;
+      const shared = (other.tags ?? []).filter((t) => myTags.has(t.toLowerCase()));
+      const sameCat = myCat && (other.category ?? '').trim().toLowerCase() === myCat;
+      const score = shared.length * 10 + (sameCat ? 1 : 0);
+      if (score <= 0) continue;
+      const reason = shared.length
+        ? `Shares tag${shared.length > 1 ? 's' : ''}: ${shared.slice(0, 2).join(', ')}`
+        : `Same category: ${other.category}`;
+      relatedItems.push({ entry: other, reason, score });
+      seenRelated.add(other.id);
+    }
+    relatedItems.sort((a, b) => b.score - a.score);
+
+    const semantic = await Data.relatedEntries(id);
+    for (const r of semantic) {
+      if (seenRelated.has(r.id)) continue;
+      seenRelated.add(r.id);
+      relatedItems.push({
+        entry: r,
+        reason: `${Math.round(r.similarity * 100)}% related`,
+        score: r.similarity,
+      });
+    }
+
+    if (relatedItems.length) {
       const wrap = el('div');
-      for (const r of related) {
+      for (const { entry: r, reason } of relatedItems.slice(0, 5)) {
         wrap.append(el('button', {
           class: 'linked-entry', type: 'button',
           onClick: () => go({ name: 'detail', id: r.id }),
         }, [
-          faceplate({
-            faceplate_type: r.faceplate_type, faceplate_text: r.faceplate_text,
-            faceplate_bg: r.faceplate_bg, faceplate_color: r.faceplate_color,
-            faceplate_font: r.faceplate_font, faceplate_image: r.faceplate_image,
-            title: r.title,
-          }),
+          faceplate(r),
           el('div', { class: 'linked-entry-info' }, [
             el('div', { class: 'linked-entry-title', text: r.title }),
-            el('div', {
-              class: 'linked-entry-rel',
-              text: `${Math.round(r.similarity * 100)}% related`,
-            }),
+            el('div', { class: 'linked-entry-rel', text: reason }),
           ]),
           r.category ? el('span', { class: 'pill', text: r.category }) : null,
         ]));
       }
       panel.append(section('Related entries', wrap));
     }
-  } catch { /* feature not set up yet — say nothing */ }
+  } catch { /* non-fatal */ }
 
   return panel;
 }
@@ -933,10 +1088,16 @@ async function viewForm(editId) {
         const other = State.entries.find((e) => e.id === otherId);
         return { id: otherId, title: other?.title ?? '(missing)', relation: l.relation ?? '' };
       }).filter((l) => l.id);
+    } else if (State.prefillNew) {
+      if (State.prefillNew.linkFromId) {
+        const origin = State.entries.find((e) => e.id === State.prefillNew.linkFromId);
+        if (origin) links.push({ id: origin.id, title: origin.title, relation: '' });
+      }
     }
+    const fpDefaults = defaultFaceplateColors();
     State.form = {
       forId: editId ?? 'new',
-      title: existing?.title ?? '',
+      title: existing?.title ?? State.prefillNew?.title ?? '',
       category: existing?.category ?? '',
       subcategory: existing?.subcategory ?? '',
       summary: existing?.summary ?? '',
@@ -945,13 +1106,14 @@ async function viewForm(editId) {
       fp: {
         type: existing?.faceplate_type ?? 'text',
         text: existing?.faceplate_text ?? '',
-        bg: existing?.faceplate_bg ?? '#28241c',
-        color: existing?.faceplate_color ?? '#c9a84c',
+        bg: existing?.faceplate_bg ?? fpDefaults.bg,
+        color: existing?.faceplate_color ?? fpDefaults.color,
         font: existing?.faceplate_font ?? 'default',
         image: existing?.faceplate_image ?? null,
       },
       fields, tags, links,
     };
+    State.prefillNew = null;
   }
 
   const F = State.form;
@@ -974,6 +1136,7 @@ async function viewForm(editId) {
     input.value = F[key] ?? '';
     input.placeholder = opts.placeholder ?? '';
     input.addEventListener('input', () => { F[key] = input.value; });
+    if (opts.onBlur) input.addEventListener('blur', opts.onBlur);
     if (opts.list) input.setAttribute('list', opts.list);
     return el('div', { class: 'field' }, [
       el('label', { class: 'field-label', for: id, text: labelText }),
@@ -989,12 +1152,12 @@ async function viewForm(editId) {
   for (const c of categories) datalist.append(el('option', { value: c }));
   panel.append(datalist);
 
-  // Kept as a direct reference rather than looked up later — the panel
-  // isn't attached to the live document until viewForm() returns, so a
-  // document.getElementById() call from later in this same function
-  // would search a document that doesn't contain it yet and silently
-  // find nothing.
-  const categoryField = textField('Category *', 'category', { placeholder: 'e.g. Biology, History', list: 'cat-options' });
+  let suggestions;
+
+  const categoryField = textField('Category *', 'category', {
+    placeholder: 'e.g. Biology, History', list: 'cat-options',
+    onBlur: () => suggestions?.refresh(),
+  });
   panel.append(el('div', { class: 'form-grid' }, [
     categoryField,
     textField('Subcategory', 'subcategory', { placeholder: 'Optional' }),
@@ -1002,10 +1165,15 @@ async function viewForm(editId) {
 
   panel.append(faceplateBuilder(F));
   panel.append(textField('Summary', 'summary', {
-    multiline: true, style: { minHeight: '76px' }, placeholder: 'A sentence or two, shown in lists.',
+    multiline: true, style: { minHeight: '76px' },
+    placeholder: 'A sentence or two, shown in lists.',
+    onBlur: () => suggestions?.refresh(),
   }));
   panel.append(textField('Notes', 'body', {
-    multiline: true, style: { minHeight: '220px' }, placeholder: 'Everything you want to keep about this topic.',
+    multiline: true, style: { minHeight: '220px' },
+    placeholder: 'Everything you want to keep about this topic. Supports ## subheadings, - bullet lists, **bold**, *italic*, and [[Entry Title]] inline links.',
+    hint: 'Tip: Link to another entry right inside a sentence by typing [[Entry Title]].',
+    onBlur: () => suggestions?.refresh(),
   }));
 
   /* Custom fields */
@@ -1036,12 +1204,6 @@ async function viewForm(editId) {
       onClick: () => { F.fields.push({ name: '', value: '' }); renderFields(); },
     }, '+ Add field'),
   ]));
-
-  // Assigned below, after the suggestions section exists — declared here so
-  // the tag handlers (defined first, since Tags appears above Links in the
-  // form) can safely reference it. By the time a person actually adds or
-  // removes a tag, the whole form has finished rendering and this is set.
-  let suggestions;
 
   /* Tags */
   const tagBox = el('div', { class: 'tags-input' });
@@ -1074,17 +1236,9 @@ async function viewForm(editId) {
     el('label', { class: 'field-label', text: 'Tags' }), tagBox,
   ]));
 
-  /* Links — suggestions first (free, explainable matches on tags/category,
-     backed by a semantic fallback once an entry has been saved at least
-     once), then the manual search-and-add picker for anything they miss. */
-  const linkPickerResult = linkPicker(F, editId);
+  const linkPickerResult = linkPicker(F, editId, () => suggestions?.refresh());
   suggestions = suggestedLinksSection(F, editId, linkPickerResult.renderChips);
   panel.append(suggestions.el, linkPickerResult.el);
-
-  // Category has no dedicated change hook like tags does — this input is
-  // built generically by textField(), so hook its blur here instead of
-  // threading a callback through that shared helper for one field.
-  categoryField.querySelector('input')?.addEventListener('blur', () => suggestions.refresh());
 
   panel.append(textField('Source', 'source', { placeholder: 'URL, book, paper or reference' }));
 
@@ -1095,6 +1249,18 @@ async function viewForm(editId) {
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
+      // Automatically include any [[Entry Title]] wiki-links written in Summary/Notes
+      // that match an existing entry and aren't already in F.links.
+      const mentionedTitles = extractWikiLinks((F.summary ?? '') + '\n' + (F.body ?? ''));
+      for (const mTitle of mentionedTitles) {
+        const target = State.entries.find(
+          (e) => e.id !== editId && e.title.trim().toLowerCase() === mTitle.toLowerCase()
+        );
+        if (target && !F.links.some((l) => l.id === target.id)) {
+          F.links.push({ id: target.id, title: target.title, relation: 'Referenced in notes' });
+        }
+      }
+
       const id = await Data.save(
         { ...F, title: F.title.trim(), category: F.category.trim() },
         F.fields, F.tags, F.links, editId
@@ -1103,8 +1269,6 @@ async function viewForm(editId) {
       await Data.loadAll();
       toast(existing ? 'Changes saved' : 'Entry created');
       go({ name: 'detail', id });
-      // Best-effort — the entry is already saved and the user has already
-      // moved on by the time this resolves or fails either way.
       Data.requestEmbedding(id).catch(() => {});
     } catch (err) {
       toast(err.message || 'Could not save', true);
@@ -1124,26 +1288,8 @@ async function viewForm(editId) {
   return panel;
 }
 
-/* ── Import ────────────────────────────────────────────────────────
-   Paste-a-whole-entry-at-once, as an alternative to viewForm()'s
-   field-by-field editor — for bringing in content written somewhere
-   else, or several entries in one go. Reuses Data.save() exactly as
-   viewForm() does, rather than a separate insert path, so imported
-   entries are never a second-class kind of row in the database.
+/* ── Import ──────────────────────────────────────────────────────── */
 
-   The actual text -> draft parsing (parseImportBlock/parseImportText)
-   lives in lib/import-parser.mjs, not here — pulled out into its own
-   module so it can be unit-tested without booting the whole app. See
-   tests/import-parser.test.mjs and the README's "Before pushing" section. */
-
-/**
- * Handed to the user via "Copy AI prompt" on the import screen. Written so
- * they can paste it into any AI chat, tack on what they actually want at
- * the bottom, and get back text that pastes into the import box above with
- * zero cleanup — matching parseImportBlock/parseImportText exactly (header
- * lines contiguous from the top of the block, one blank line, then body;
- * entries separated by a lone "---" line).
- */
 const AI_IMPORT_PROMPT = `I'm writing entries for my knowledge base app, Synopsical. I need your reply in a specific plain-text format so I can paste it straight into the app's import box with no edits. Please follow this exactly.
 
 FORMAT
@@ -1157,10 +1303,11 @@ Tags: <comma-separated tags>
 Summary: <one or two sentence summary>
 Source: <optional URL or citation>
 Field: <name> = <value>
+Link: <other entry title> | <how they relate>
 
-("Field:" can repeat, one line per custom field.)
+("Field:" and "Link:" can repeat, one line per custom field or cross-reference.)
 
-Right after the last header line, leave exactly one blank line, then write the entry's full body as plain prose paragraphs — no markdown, no headings, no bullet points, just text.
+Right after the last header line, leave exactly one blank line, then write the entry's full body. You may use ## subheadings, - bullet points, **bold**, *italic*, and [[Entry Title]] inline cross-references.
 
 Title and Category are REQUIRED on every entry — never omit them.
 
@@ -1196,17 +1343,18 @@ function viewImport() {
 
   panel.append(el('div', { class: 'page-head' }, [
     el('h1', { class: 'page-title', text: 'Import entries' }),
-    el('span', { class: 'page-sub', text: 'Paste one entry, or several separated by a line of ---' }),
+    el('span', { class: 'page-sub', text: 'Paste entries, or upload a .json backup or .md / .txt file' }),
     aiPromptBtn,
   ]));
 
   panel.append(el('div', { class: 'hint', style: { marginBottom: '14px', lineHeight: '1.7' } }, [
-    'Recognized lines (all optional): ',
+    'Recognized headers (all optional): ',
     el('code', { text: 'Title:' }), ' ', el('code', { text: 'Category:' }), ' ',
-    el('code', { text: 'Subcategory:' }), ' ', el('code', { text: 'Tags:' }), ' (comma-separated) ',
+    el('code', { text: 'Subcategory:' }), ' ', el('code', { text: 'Tags:' }), ' ',
     el('code', { text: 'Summary:' }), ' ', el('code', { text: 'Source:' }), ' ',
-    el('code', { text: 'Field: Name = Value' }), ' (repeat for more). ',
-    'Everything else is the body. No header at all? The first line becomes the title.',
+    el('code', { text: 'Field: Name = Value' }), ' ',
+    el('code', { text: 'Link: Target Title | Relation' }), '. ',
+    'You can also restore a full ', el('code', { text: 'synopsical-export' }), ' JSON backup file below.',
   ]));
 
   const textarea = el('textarea', {
@@ -1215,6 +1363,42 @@ function viewImport() {
       + 'Two periods of imperial bans on religious icons...\n\n---\n\n'
       + 'Title: Mycorrhizal Networks\nCategory: Biology\n...',
   });
+
+  const fileInput = el('input', {
+    type: 'file', accept: '.json,.md,.txt,application/json,text/plain,text/markdown',
+    multiple: true, style: { display: 'none' },
+  });
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files ?? []);
+    fileInput.value = '';
+    if (!files.length) return;
+    try {
+      const texts = await Promise.all(files.map((f) => f.text()));
+      const allDrafts = [];
+      for (const t of texts) {
+        allDrafts.push(...parseImportText(t));
+      }
+      if (!allDrafts.length) {
+        toast('No valid entries found in the selected file(s)', true);
+        return;
+      }
+      State.importDrafts = allDrafts;
+      renderPreview();
+      toast(`Loaded ${allDrafts.length} ${allDrafts.length === 1 ? 'entry' : 'entries'} from file`);
+    } catch (err) {
+      toast(err.message || 'Could not read file', true);
+    }
+  });
+
+  panel.append(el('div', { class: 'import-file-bar' }, [
+    el('button', {
+      class: 'btn btn-sm', type: 'button', onClick: () => fileInput.click(),
+    }, 'Upload .json backup or .md / .txt file'),
+    fileInput,
+    el('span', { class: 'hint', style: { marginTop: 0 } },
+      'Restores exported JSON backups (including fields, tags, and links) or plain-text/Markdown files.'),
+  ]));
+
   panel.append(el('div', { class: 'field' }, [textarea]));
 
   const previewHost = el('div');
@@ -1277,7 +1461,7 @@ function viewImport() {
 
   const previewBtn = el('button', { class: 'btn btn-primary', type: 'button' }, 'Preview');
   previewBtn.addEventListener('click', () => {
-    if (!textarea.value.trim()) { toast('Paste something first', true); return; }
+    if (!textarea.value.trim()) { toast('Paste something or upload a file first', true); return; }
     State.importDrafts = parseImportText(textarea.value);
     renderPreview();
   });
@@ -1299,24 +1483,62 @@ async function runImport(drafts, btn) {
 
   btn.disabled = true;
   let done = 0, failed = 0;
+  const fpDefaults = defaultFaceplateColors();
+  const oldIdToNewId = new Map();
+  const titleToNewId = new Map();
+  for (const existing of State.entries) {
+    titleToNewId.set(existing.title.trim().toLowerCase(), existing.id);
+  }
+  const savedDrafts = [];
+
   for (const d of included) {
     btn.textContent = `Importing ${done + failed + 1} of ${included.length}…`;
     try {
-      // Same default faceplate viewForm() gives a brand-new entry — kept
-      // identical rather than diverging, so an imported entry doesn't look
-      // like a second-class citizen next to one made by hand.
       const id = await Data.save(
         {
           title: d.title.trim(), category: d.category.trim(), subcategory: d.subcategory,
           summary: d.summary, body: d.body, source: d.source,
-          fp: { type: 'text', text: '', bg: '#28241c', color: '#c9a84c', font: 'default', image: null },
+          fp: d.fp ?? { type: 'text', text: '', bg: fpDefaults.bg, color: fpDefaults.color, font: 'default', image: null },
         },
         d.fields, d.tags, [], null
       );
-      Data.requestEmbedding(id).catch(() => {}); // best-effort, same as a normal save
+      if (d._originalId) oldIdToNewId.set(d._originalId, id);
+      titleToNewId.set(d.title.trim().toLowerCase(), id);
+      savedDrafts.push({ id, draft: d });
+      Data.requestEmbedding(id).catch(() => {});
       done++;
     } catch {
       failed++;
+    }
+  }
+
+  // Second pass: wire up any Link: headers, JSON bundle links, or [[Wiki-Links]]
+  const pendingLinks = [];
+  for (const { id: fromId, draft: d } of savedDrafts) {
+    const rawLinks = [...(d.links ?? [])];
+    for (const wikiTarget of extractWikiLinks((d.summary ?? '') + '\n' + (d.body ?? ''))) {
+      if (!rawLinks.some((l) => (l.targetTitle ?? '').toLowerCase() === wikiTarget.toLowerCase())) {
+        rawLinks.push({ targetTitle: wikiTarget, relation: 'Referenced in notes' });
+      }
+    }
+    for (const l of rawLinks) {
+      const toId = (l.targetId && oldIdToNewId.get(l.targetId))
+        || (l.targetTitle && titleToNewId.get(l.targetTitle.trim().toLowerCase()));
+      if (toId && toId !== fromId) {
+        pendingLinks.push({ from_entry_id: fromId, to_entry_id: toId, relation: l.relation || null });
+      }
+    }
+  }
+
+  if (pendingLinks.length) {
+    if (State.demo) {
+      for (const pl of pendingLinks) {
+        State.links.push({ id: 'dlink-' + crypto.randomUUID(), ...pl });
+      }
+    } else {
+      try {
+        await State.sb.from('links').insert(pendingLinks);
+      } catch { /* ignore duplicate link constraint errors */ }
     }
   }
 
@@ -1369,11 +1591,6 @@ function faceplateBuilder(F) {
       controls.append(el('div', { class: 'fp-row' }, [el('span', { class: 'fp-label', text: 'Initials' }), textInput]));
       controls.append(colourRow('Text colour', 'color'));
     } else {
-      // The actual upload, factored out to its own function rather than
-      // living inline in the file input's change handler — three different
-      // triggers (pick a file, drop a file, paste a file) all end up with
-      // nothing more than a File object, so they can all hand off to the
-      // exact same place instead of three near-copies of this logic.
       const handleImageFile = async (file) => {
         if (!file) return;
         if (!file.type.startsWith('image/')) { toast('That file isn’t an image', true); return; }
@@ -1396,22 +1613,11 @@ function faceplateBuilder(F) {
         class: 'btn btn-sm', type: 'button', onClick: () => fileInput.click(),
       }, F.fp.image ? 'Replace image' : 'Choose image');
 
-      // A real drop target, not just the file input — tabindex makes it
-      // focusable (a plain <div> can't normally receive keyboard focus or
-      // a paste event at all), and it's paste's turn once it has focus:
-      // click the zone, or click "Choose image" first, either puts focus
-      // here, and Ctrl+V then fires 'paste' on whatever currently has
-      // focus, which is exactly this element.
       const dropzone = el('div', { class: 'fp-dropzone', tabindex: '0' }, [
         el('span', { class: 'fp-dropzone-text' }, 'Drop an image, or paste one (Ctrl+V), or:'),
         el('div', { class: 'fp-row', style: { marginTop: '8px' } }, [pick, fileInput]),
       ]);
 
-      // dragover has to call preventDefault() — that's not incidental, it's
-      // literally how the Drag and Drop API decides whether an element is
-      // allowed to be a drop target at all. Without it, the browser's
-      // default behavior for a dropped file is to navigate away and open
-      // it, same as dragging a photo onto a browser tab from the desktop.
       dropzone.addEventListener('dragover', (ev) => {
         ev.preventDefault();
         dropzone.classList.add('drag-active');
@@ -1423,15 +1629,9 @@ function faceplateBuilder(F) {
         handleImageFile(ev.dataTransfer?.files?.[0]);
       });
 
-      // Clipboard paste hands over a list of "items" tagged with a MIME
-      // type, not files directly — an image copied from an image editor
-      // and one copied as a browser screenshot both show up as an item
-      // whose type starts with "image/", and .getAsFile() is what turns
-      // that item into the same kind of File object the other two paths
-      // already produce.
       dropzone.addEventListener('paste', (ev) => {
         const item = [...(ev.clipboardData?.items ?? [])].find((it) => it.type.startsWith('image/'));
-        if (!item) return; // let a normal text paste (if this ever holds text focus) through untouched
+        if (!item) return;
         ev.preventDefault();
         handleImageFile(item.getAsFile());
       });
@@ -1458,16 +1658,6 @@ function faceplateBuilder(F) {
   ]);
 }
 
-/**
- * Suggested links — deliberately NOT AI-first. Shared tags and matching
- * category are free, instant, and explainable, so they're the primary
- * signal and run entirely client-side against State.entries, no request
- * at all. Semantic similarity (the embedding pipeline) only ever supplies
- * a secondary layer, for entries that share no tag or category but are
- * still plausibly related — and only once this entry has been saved at
- * least once, since a brand-new entry has no stored embedding yet to
- * compare against.
- */
 function suggestedLinksSection(F, editId, onLinkAdded) {
   const list = el('div');
   const wrap = el('div', { class: 'field', hidden: true }, [
@@ -1479,23 +1669,29 @@ function suggestedLinksSection(F, editId, onLinkAdded) {
     const linkedIds = new Set(F.links.map((l) => l.id));
     const myTags = new Set(F.tags.map((t) => t.toLowerCase()));
     const myCategory = F.category.trim().toLowerCase();
+    const mentioned = new Set(
+      extractWikiLinks((F.summary ?? '') + '\n' + (F.body ?? '')).map((t) => t.toLowerCase())
+    );
     const out = [];
     for (const e of State.entries) {
       if (e.id === editId || linkedIds.has(e.id)) continue;
+      const isMentioned = mentioned.has(e.title.trim().toLowerCase());
       const shared = (e.tags ?? []).filter((t) => myTags.has(t.toLowerCase()));
       const sameCategory = myCategory && e.category && e.category.trim().toLowerCase() === myCategory;
-      const score = shared.length * 10 + (sameCategory ? 1 : 0);
+      const score = (isMentioned ? 50 : 0) + shared.length * 10 + (sameCategory ? 1 : 0);
       if (score <= 0) continue;
-      const reason = shared.length
-        ? `Shares tag${shared.length > 1 ? 's' : ''}: ${shared.slice(0, 2).join(', ')}`
-        : `Same category: ${e.category}`;
+      const reason = isMentioned
+        ? `Mentioned in notes: [[${e.title}]]`
+        : shared.length
+          ? `Shares tag${shared.length > 1 ? 's' : ''}: ${shared.slice(0, 2).join(', ')}`
+          : `Same category: ${e.category}`;
       out.push({ id: e.id, title: e.title, category: e.category, reason, score });
     }
     return out.sort((a, b) => b.score - a.score).slice(0, 5);
   }
 
   async function semanticCandidates(excludeIds) {
-    if (!editId) return []; // nothing saved yet — no embedding exists to compare
+    if (!editId) return [];
     try {
       const related = await Data.relatedEntries(editId, 6);
       return related
@@ -1505,7 +1701,7 @@ function suggestedLinksSection(F, editId, onLinkAdded) {
           id: r.id, title: r.title, category: r.category,
           reason: `${Math.round(r.similarity * 100)}% related`,
         }));
-    } catch { return []; } // schema-05 not run yet, or no embedding yet — say nothing
+    } catch { return []; }
   }
 
   function addSuggestion(c) {
@@ -1543,7 +1739,7 @@ function suggestedLinksSection(F, editId, onLinkAdded) {
   return { el: wrap, refresh };
 }
 
-function linkPicker(F, editId) {
+function linkPicker(F, editId, onChange) {
   const chips = el('div', { class: 'linked-chips' });
   const dropdown = el('div', { class: 'link-dropdown', hidden: true });
   const input = el('input', { class: 'input', placeholder: 'Search entries to link…', autocomplete: 'off' });
@@ -1555,7 +1751,7 @@ function linkPicker(F, editId) {
         l.title + (l.relation ? ` · ${l.relation}` : ''),
         el('button', {
           class: 'chip-x', type: 'button', 'aria-label': `Unlink ${l.title}`,
-          onClick: () => { F.links.splice(i, 1); renderChips(); },
+          onClick: () => { F.links.splice(i, 1); renderChips(); onChange?.(); },
         }, '×'),
       ]));
     });
@@ -1580,6 +1776,7 @@ function linkPicker(F, editId) {
           input.value = '';
           dropdown.hidden = true;
           renderChips();
+          onChange?.();
         },
       }, [el('span', { text: m.title }), m.category ? el('span', { class: 'pill', text: m.category }) : null]));
     }
@@ -1608,7 +1805,7 @@ function viewSettings() {
   const panel = el('div', { class: 'panel' });
   panel.append(el('div', { class: 'page-head' }, [
     el('h1', { class: 'page-title', text: 'Appearance' }),
-    el('span', { class: 'page-sub', text: 'Synced with your account' }),
+    el('span', { class: 'page-sub', text: State.demo ? 'Live preview in Sample Mode' : 'Synced with your account' }),
   ]));
 
   const presets = el('div', { class: 'theme-presets' });
@@ -1636,12 +1833,6 @@ function viewSettings() {
     el('div', { class: 'section-label', text: 'Theme' }), presets,
   ]));
 
-  // withDefault: true adds a "Match theme" option at the top, for the
-  // four per-element rows below — Interface/Reading don't get one,
-  // because they ARE the theme's own fonts; there's nothing for them to
-  // match. Its value is '', and current is normalized with `|| ''` so
-  // null/undefined (never having been set) selects it too, the same way
-  // applyTheme() treats any falsy value as "not overridden."
   const fontRow = (labelText, key, withDefault = false) => {
     const select = el('select', { class: 'select' });
     const current = State.settings[key] || '';
@@ -1691,7 +1882,7 @@ function viewSettings() {
     slider.addEventListener('input', () => {
       State.settings.fontSize = Number(slider.value);
       readout.textContent = `${slider.value}px`;
-      applyTheme(); // live preview — no reload needed to see the new size
+      applyTheme();
     });
     slider.addEventListener('change', async () => {
       try { await Data.saveSettings(); } catch { /* non-fatal */ }
@@ -1745,41 +1936,37 @@ function viewSettings() {
     el('div', { class: 'section-label', text: 'Fine tuning' }), colours,
   ]));
 
-  panel.append(el('div', { class: 'section' }, [
-    el('div', { class: 'section-label', text: 'Account' }),
-    el('p', { class: 'hint', style: { marginBottom: '12px' } },
-      'Deleting your account removes every entry, tag, link, custom field, uploaded font and faceplate image — permanently.'),
-    el('button', {
-      class: 'btn btn-danger', type: 'button',
-      onClick: async () => {
-        const ok = await confirmDialog(
-          'Delete your account?',
-          'Every entry, tag, link, custom field, uploaded font and faceplate image will be permanently removed. This cannot be undone.',
-          'Delete my account'
-        );
-        if (!ok) return;
-        try {
-          await Data.deleteAccount();
-          State.user = null;
-          State.entries = [];
-          toast('Your account and all its data have been deleted');
-          showHomepage();
-        } catch (err) {
-          toast(err.message || 'Could not delete your account', true);
-        }
-      },
-    }, 'Delete my account'),
-  ]));
+  if (!State.demo) {
+    panel.append(el('div', { class: 'section' }, [
+      el('div', { class: 'section-label', text: 'Account' }),
+      el('p', { class: 'hint', style: { marginBottom: '12px' } },
+        'Deleting your account removes every entry, tag, link, custom field, uploaded font and faceplate image — permanently.'),
+      el('button', {
+        class: 'btn btn-danger', type: 'button',
+        onClick: async () => {
+          const ok = await confirmDialog(
+            'Delete your account?',
+            'Every entry, tag, link, custom field, uploaded font and faceplate image will be permanently removed. This cannot be undone.',
+            'Delete my account'
+          );
+          if (!ok) return;
+          try {
+            await Data.deleteAccount();
+            State.user = null;
+            State.entries = [];
+            toast('Your account and all its data have been deleted');
+            showHomepage();
+          } catch (err) {
+            toast(err.message || 'Could not delete your account', true);
+          }
+        },
+      }, 'Delete my account'),
+    ]));
+  }
 
   return panel;
 }
 
-/**
- * Real custom font upload — .otf/.ttf/.woff/.woff2 to Supabase Storage,
- * distinct from the six preset fonts above. This is what the original
- * beta had that the rewrite was missing: those presets are convenient
- * defaults, this is "bring your own font file."
- */
 function customFontsSection() {
   const wrap = el('div', { class: 'section' });
   wrap.append(el('div', { class: 'section-label', text: 'Custom fonts' }));
@@ -1850,9 +2037,6 @@ async function removeCustomFont(f) {
   State.settings.customFonts = (State.settings.customFonts ?? []).filter((x) => x.family !== f.family);
   if (State.settings.fontUi === f.family) State.settings.fontUi = 'serif';
   if (State.settings.fontBody === f.family) State.settings.fontBody = 'serif';
-  // The four overrides fall back to "Match theme" (null), not 'serif' —
-  // unlike fontUi/fontBody, they have a real "unset" state to fall back
-  // to instead of needing a hardcoded font of their own.
   for (const key of ['fontTitle', 'fontSummary', 'fontTags', 'fontCategories']) {
     if (State.settings[key] === f.family) State.settings[key] = null;
   }
@@ -1872,31 +2056,55 @@ async function removeCustomFont(f) {
 /* ── Link map ──────────────────────────────────────────────────── */
 
 function viewGraph() {
-  const wrap = el('div');
+  const wrap = el('div', { class: 'graph-wrap' });
+  const toolbar = el('div', { class: 'graph-toolbar' });
+  const filterBar = el('div', { class: 'graph-filters' });
+  const controlsBar = el('div', { class: 'graph-controls' });
   const canvas = el('canvas', { id: 'graph-canvas' });
-  wrap.append(canvas);
+
+  toolbar.append(filterBar, controlsBar);
+  wrap.append(toolbar, canvas);
+
+  let activeCategory = null;
+  let zoom = 1, panX = 0, panY = 0;
+
+  const categories = [...new Set(State.entries.map((e) => e.category).filter(Boolean))].slice(0, 7);
+  const rebuildFilterButtons = (onPick) => {
+    clear(filterBar);
+    filterBar.append(el('button', {
+      class: 'graph-filter-btn' + (activeCategory === null ? ' active' : ''),
+      type: 'button',
+      onClick: () => { activeCategory = null; onPick(); rebuildFilterButtons(onPick); },
+    }, 'All categories'));
+    for (const cat of categories) {
+      filterBar.append(el('button', {
+        class: 'graph-filter-btn' + (activeCategory === cat ? ' active' : ''),
+        type: 'button',
+        onClick: () => { activeCategory = cat; onPick(); rebuildFilterButtons(onPick); },
+      }, cat));
+    }
+  };
 
   requestAnimationFrame(() => {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.clientWidth, H = canvas.clientHeight;
     canvas.width = W * dpr; canvas.height = H * dpr;
-    ctx.scale(dpr, dpr);
 
     const style = getComputedStyle(document.documentElement);
     const col = (n, fallback) => (style.getPropertyValue(n).trim() || fallback);
+    const fontBody = col('--font-body', 'Georgia, serif');
+    const fontMono = col('--font-mono', 'monospace');
 
     const entries = State.entries;
     if (!entries.length) {
-      ctx.fillStyle = col('--text3', '#5a5244');
-      ctx.font = '16px Georgia'; ctx.textAlign = 'center';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = col('--text3', '#65707d');
+      ctx.font = `16px ${fontBody}`; ctx.textAlign = 'center';
       ctx.fillText('No entries yet', W / 2, H / 2);
       return;
     }
 
-    // Only the most-linked entries are drawn. Beyond about a hundred
-    // nodes a force layout stops being readable, so the rest are omitted
-    // rather than rendered into an unreadable mat.
     const CAP = 100;
     const shown = [...entries].sort((a, b) => b.linkCount - a.linkCount).slice(0, CAP);
     const ids = new Set(shown.map((e) => e.id));
@@ -1904,106 +2112,191 @@ function viewGraph() {
 
     const nodes = shown.map((e, i) => {
       const a = (i / shown.length) * Math.PI * 2;
-      return { e, x: W / 2 + Math.cos(a) * Math.min(W, H) * 0.33,
-                  y: H / 2 + Math.sin(a) * Math.min(W, H) * 0.33, vx: 0, vy: 0 };
+      return { e, x: W / 2 + Math.cos(a) * Math.min(W, H) * 0.28,
+                  y: H / 2 + Math.sin(a) * Math.min(W, H) * 0.28, vx: 0, vy: 0 };
     });
     const byId = new Map(nodes.map((n) => [n.e.id, n]));
     const edges = (State.links ?? []).filter((l) => ids.has(l.from_entry_id) && ids.has(l.to_entry_id));
 
-    let dragging = null, frame = 0, raf = 0;
+    let dragging = null, panning = false, panStart = null, hovered = null, frame = 0, raf = 0;
+
+    controlsBar.append(
+      el('button', {
+        class: 'graph-filter-btn', type: 'button', title: 'Zoom in',
+        onClick: () => { zoom = Math.min(2.5, zoom * 1.2); draw(); },
+      }, '+'),
+      el('button', {
+        class: 'graph-filter-btn', type: 'button', title: 'Zoom out',
+        onClick: () => { zoom = Math.max(0.45, zoom / 1.2); draw(); },
+      }, '−'),
+      el('button', {
+        class: 'graph-filter-btn', type: 'button',
+        onClick: () => { zoom = 1; panX = 0; panY = 0; frame = 0; draw(); },
+      }, 'Reset')
+    );
+
+    rebuildFilterButtons(() => draw());
 
     const step = () => {
       for (const a of nodes) {
         for (const b of nodes) {
           if (a === b) continue;
           const dx = a.x - b.x, dy = a.y - b.y;
-          const d2 = Math.max(dx * dx + dy * dy, 25);
-          const f = 2600 / d2, d = Math.sqrt(d2);
+          const d2 = Math.max(dx * dx + dy * dy, 36);
+          const f = 3200 / d2, d = Math.sqrt(d2);
           a.vx += (dx / d) * f; a.vy += (dy / d) * f;
         }
-        a.vx += (W / 2 - a.x) * 0.004; a.vy += (H / 2 - a.y) * 0.004;
+        a.vx += (W / 2 - a.x) * 0.0045; a.vy += (H / 2 - a.y) * 0.0045;
       }
       for (const l of edges) {
         const a = byId.get(l.from_entry_id), b = byId.get(l.to_entry_id);
         if (!a || !b) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
-        const d = Math.max(Math.hypot(dx, dy), 1), f = (d - 130) * 0.05;
+        const d = Math.max(Math.hypot(dx, dy), 1), f = (d - 145) * 0.05;
         a.vx += (dx / d) * f; a.vy += (dy / d) * f;
         b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
       }
       for (const n of nodes) {
         if (n === dragging) continue;
         n.vx *= 0.78; n.vy *= 0.78;
-        n.x = Math.max(40, Math.min(W - 40, n.x + n.vx));
-        n.y = Math.max(30, Math.min(H - 30, n.y + n.vy));
+        n.x = Math.max(50, Math.min(W - 50, n.x + n.vx));
+        n.y = Math.max(60, Math.min(H - 40, n.y + n.vy));
       }
     };
 
     const draw = () => {
-      ctx.fillStyle = col('--bg0', '#0e0d0b');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = col('--bg0', '#f3f5f7');
       ctx.fillRect(0, 0, W, H);
 
-      ctx.strokeStyle = col('--border', '#3a342a');
-      ctx.lineWidth = 1;
+      ctx.save();
+      ctx.translate(W / 2 + panX, H / 2 + panY);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-W / 2, -H / 2);
+
+      const neighborIds = new Set();
+      if (hovered) {
+        neighborIds.add(hovered.e.id);
+        for (const l of edges) {
+          if (l.from_entry_id === hovered.e.id) neighborIds.add(l.to_entry_id);
+          if (l.to_entry_id === hovered.e.id) neighborIds.add(l.from_entry_id);
+        }
+      }
+
       for (const l of edges) {
         const a = byId.get(l.from_entry_id), b = byId.get(l.to_entry_id);
         if (!a || !b) continue;
+        const isHighlighted = hovered && (l.from_entry_id === hovered.e.id || l.to_entry_id === hovered.e.id);
+        const catDim = activeCategory && a.e.category !== activeCategory && b.e.category !== activeCategory;
+        ctx.globalAlpha = catDim ? 0.14 : hovered ? (isHighlighted ? 0.95 : 0.2) : 0.75;
+        ctx.strokeStyle = isHighlighted ? col('--accent', '#0a29fa') : col('--border2', '#c3cbd4');
+        ctx.lineWidth = isHighlighted ? 2 : 1.2;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+
+        if (isHighlighted && l.relation) {
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          ctx.font = `10px ${fontMono}`;
+          ctx.fillStyle = col('--accent', '#0a29fa');
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText(l.relation.slice(0, 38), mx, my - 4);
+        }
       }
 
+      const fpDefaults = defaultFaceplateColors();
       for (const n of nodes) {
-        const r = 9 + Math.min(n.e.linkCount * 2, 13);
-        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = n.e.faceplate_bg || '#28241c'; ctx.fill();
-        ctx.strokeStyle = (n.e.faceplate_color || col('--accent', '#c9a84c')); ctx.lineWidth = 1.5; ctx.stroke();
+        const catMatch = !activeCategory || n.e.category === activeCategory;
+        const hoverMatch = !hovered || neighborIds.has(n.e.id);
+        ctx.globalAlpha = catMatch && hoverMatch ? 1 : 0.22;
 
-        ctx.fillStyle = n.e.faceplate_color || col('--accent', '#c9a84c');
-        ctx.font = `bold ${Math.max(9, r * 0.7)}px Georgia`;
+        const r = 12 + Math.min(n.e.linkCount * 2, 12);
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = n.e.faceplate_bg || fpDefaults.bg; ctx.fill();
+        ctx.strokeStyle = (n === hovered)
+          ? col('--accent', '#0a29fa')
+          : (n.e.faceplate_color || fpDefaults.color);
+        ctx.lineWidth = (n === hovered) ? 2.5 : 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = n.e.faceplate_color || fpDefaults.color;
+        ctx.font = `bold ${Math.max(9, r * 0.65)}px ${fontBody}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText((n.e.faceplate_text || n.e.title.slice(0, 2)).toUpperCase().slice(0, 3), n.x, n.y);
 
-        ctx.fillStyle = col('--text1', '#c8bfa8');
-        ctx.font = '11px Georgia'; ctx.textBaseline = 'alphabetic';
-        const label = n.e.title.length > 22 ? n.e.title.slice(0, 20) + '…' : n.e.title;
-        ctx.fillText(label, n.x, n.y + r + 13);
+        ctx.fillStyle = col('--text0', '#14181f');
+        ctx.font = `600 11.5px ${fontBody}`; ctx.textBaseline = 'alphabetic';
+        const label = n.e.title.length > 24 ? n.e.title.slice(0, 22) + '…' : n.e.title;
+        ctx.fillText(label, n.x, n.y + r + 14);
       }
 
+      ctx.restore();
+      ctx.globalAlpha = 1;
+
       if (omitted > 0) {
-        ctx.fillStyle = col('--text3', '#5a5244');
-        ctx.font = '12px Georgia'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText(`Showing the ${shown.length} most-linked entries · ${omitted} not drawn`, 14, 12);
+        ctx.fillStyle = col('--text3', '#65707d');
+        ctx.font = `12px ${fontMono}`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        ctx.fillText(`Showing the ${shown.length} most-linked entries · ${omitted} not drawn`, 16, H - 14);
       }
     };
 
     const loop = () => { if (frame++ < 260) step(); draw(); raf = requestAnimationFrame(loop); };
     loop();
 
-    const at = (ev) => {
+    const toWorld = (ev) => {
       const r = canvas.getBoundingClientRect();
-      return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+      return {
+        sx, sy,
+        x: (sx - W / 2 - panX) / zoom + W / 2,
+        y: (sy - H / 2 - panY) / zoom + H / 2,
+      };
     };
+
     let downPos = null;
     canvas.addEventListener('pointerdown', (ev) => {
-      const p = at(ev); downPos = p;
+      const p = toWorld(ev);
+      downPos = { sx: p.sx, sy: p.sy };
       dragging = nodes.find((n) => Math.hypot(p.x - n.x, p.y - n.y) < 26) ?? null;
-      if (dragging) canvas.setPointerCapture(ev.pointerId);
+      if (dragging) {
+        canvas.setPointerCapture(ev.pointerId);
+      } else {
+        panning = true;
+        panStart = { x: p.sx - panX, y: p.sy - panY };
+        canvas.setPointerCapture(ev.pointerId);
+      }
     });
     canvas.addEventListener('pointermove', (ev) => {
-      if (!dragging) return;
-      const p = at(ev); dragging.x = p.x; dragging.y = p.y; frame = 0;
+      const p = toWorld(ev);
+      if (dragging) {
+        dragging.x = p.x; dragging.y = p.y; frame = 0;
+        return;
+      }
+      if (panning && panStart) {
+        panX = p.sx - panStart.x;
+        panY = p.sy - panStart.y;
+        return;
+      }
+      const hit = nodes.find((n) => Math.hypot(p.x - n.x, p.y - n.y) < 24) ?? null;
+      if (hit !== hovered) {
+        hovered = hit;
+        canvas.style.cursor = hit ? 'pointer' : 'grab';
+      }
     });
     canvas.addEventListener('pointerup', (ev) => {
-      const p = at(ev);
-      if (dragging && downPos && Math.hypot(p.x - downPos.x, p.y - downPos.y) < 4) {
+      const p = toWorld(ev);
+      if (dragging && downPos && Math.hypot(p.sx - downPos.sx, p.sy - downPos.sy) < 5) {
         const id = dragging.e.id;
         cancelAnimationFrame(raf);
         go({ name: 'detail', id });
         return;
       }
-      dragging = null; downPos = null;
+      dragging = null; panning = false; panStart = null; downPos = null;
     });
+    canvas.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      const factor = ev.deltaY < 0 ? 1.1 : 0.9;
+      zoom = Math.max(0.45, Math.min(2.5, zoom * factor));
+    }, { passive: false });
 
-    // Stop the loop when this view is replaced.
     const observer = new MutationObserver(() => {
       if (!document.body.contains(canvas)) { cancelAnimationFrame(raf); observer.disconnect(); }
     });
@@ -2015,26 +2308,48 @@ function viewGraph() {
 
 /* ── Export ────────────────────────────────────────────────────── */
 
-async function exportEverything() {
-  toast('Preparing export…');
-  try {
-    const [{ data: entries }, { data: fields }, { data: tags }, { data: links }] = await Promise.all([
-      State.sb.from('entries').select('*').order('created_at'),
-      State.sb.from('entry_fields').select('*'),
-      State.sb.from('tags').select('*'),
-      State.sb.from('links').select('*'),
-    ]);
+async function collectExportData() {
+  if (State.demo) {
+    const entries = State.entries;
+    const fields = [];
+    const tags = [];
+    for (const e of entries) {
+      for (const f of e.fields ?? []) {
+        fields.push({ entry_id: e.id, field_name: f.field_name, field_value: f.field_value, sort_order: f.sort_order });
+      }
+      for (const t of e.tags ?? []) {
+        tags.push({ entry_id: e.id, tag: t });
+      }
+    }
+    return { entries, fields, tags, links: State.links ?? [] };
+  }
+  const [{ data: entries }, { data: fields }, { data: tags }, { data: links }] = await Promise.all([
+    State.sb.from('entries').select('*').order('created_at'),
+    State.sb.from('entry_fields').select('*'),
+    State.sb.from('tags').select('*'),
+    State.sb.from('links').select('*'),
+  ]);
+  return {
+    entries: entries ?? [],
+    fields: fields ?? [],
+    tags: tags ?? [],
+    links: links ?? [],
+  };
+}
 
+async function exportEverything() {
+  toast('Preparing JSON export…');
+  try {
+    const { entries, fields, tags, links } = await collectExportData();
     const bundle = {
       format: 'synopsical-export',
       version: 1,
       exportedAt: new Date().toISOString(),
       counts: {
-        entries: entries?.length ?? 0, fields: fields?.length ?? 0,
-        tags: tags?.length ?? 0, links: links?.length ?? 0,
+        entries: entries.length, fields: fields.length,
+        tags: tags.length, links: links.length,
       },
-      entries: entries ?? [], entry_fields: fields ?? [],
-      tags: tags ?? [], links: links ?? [],
+      entries, entry_fields: fields, tags, links,
     };
 
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
@@ -2042,9 +2357,25 @@ async function exportEverything() {
     const a = el('a', { href: url, download: `synopsical-${new Date().toISOString().slice(0, 10)}.json` });
     document.body.append(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    toast(`Exported ${bundle.counts.entries} entries`);
+    toast(`Exported ${bundle.counts.entries} entries as JSON`);
   } catch (err) {
     toast(err.message || 'Export failed', true);
+  }
+}
+
+async function exportMarkdown() {
+  toast('Preparing Markdown export…');
+  try {
+    const { entries, fields, tags, links } = await collectExportData();
+    const md = entriesToMarkdown(entries, fields, tags, links);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: `synopsical-${new Date().toISOString().slice(0, 10)}.md` });
+    document.body.append(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${entries.length} entries as Markdown`);
+  } catch (err) {
+    toast(err.message || 'Markdown export failed', true);
   }
 }
 
@@ -2093,17 +2424,8 @@ async function render() {
   if (v.name !== 'graph') host.parentElement.scrollTop = 0;
 }
 
-/* ── Authentication ────────────────────────────────────────────── */
+/* ── Authentication & Sample Mode ──────────────────────────────── */
 
-/**
- * True when this page load is a bounce-back from clicking a "confirm your
- * email" link. Supabase marks that redirect with `type=signup`, placed in
- * the URL hash for the default sign-in flow or in the query string for a
- * PKCE-configured project — so both are checked. This is the documented
- * shape of the redirect; if it ever doesn't fire for your project, the
- * quickest fix is to open the browser console right after clicking the
- * link, run `location.href`, and see what the URL actually looked like.
- */
 function isEmailConfirmationRedirect() {
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const search = new URLSearchParams(window.location.search);
@@ -2128,16 +2450,6 @@ function showVerified(hasSession) {
   };
 }
 
-/**
- * Shown when supabase-js fires the PASSWORD_RECOVERY auth event — the
- * signal that this page load is a bounce-back from a "reset your
- * password" email link, already exchanged for a short-lived session by
- * the time this fires. Unlike isEmailConfirmationRedirect() above, this
- * doesn't need to parse the URL itself: PASSWORD_RECOVERY is the
- * documented Supabase event for exactly this, and covers both the hash-
- * based and PKCE-code-based link formats without caring which one a given
- * project is configured for.
- */
 function showResetScreen() {
   $('reset-screen').hidden = false;
   $('homepage').hidden = true;
@@ -2152,36 +2464,22 @@ function showResetScreen() {
   setPasswordVisible('reset-password-confirm', false);
 }
 
-/**
- * Maps a pre-auth screen to the hash that should be in the address bar for
- * it, and back. Same shape as go()/readHash() below for the signed-in app
- * — kept as a separate pair rather than folded into those, since the two
- * routers are only ever active at different times (before vs. after a
- * session exists) and readHash()'s switch has no pre-auth cases at all.
- */
 function authHashFor(mode) {
   return mode === 'signin' ? '#/sign-in'
     : mode === 'signup' ? '#/sign-up'
     : mode === 'forgot' ? '#/forgot-password'
-    : '#/'; // homepage
+    : '#/';
 }
 function readAuthHash() {
   const raw = window.location.hash.replace(/^#\/?/, '');
   if (raw === 'sign-in') return 'signin';
   if (raw === 'sign-up') return 'signup';
   if (raw === 'forgot-password') return 'forgot';
-  return null; // homepage
+  return null;
 }
 
-/**
- * Public entry point for switching pre-auth screens — pushes the matching
- * hash (so the address bar actually changes, and back/forward actually
- * works) the same way go() does for the signed-in app, then either lets
- * the resulting hashchange do the painting or paints immediately if the
- * hash was already right. Never call paintAuth() directly from a click
- * handler; call this.
- */
 function showAuth(mode = 'signin') {
+  exitDemo(false);
   const hash = authHashFor(mode);
   if (window.location.hash !== hash) window.location.hash = hash;
   else paintAuth(mode);
@@ -2196,7 +2494,7 @@ function paintAuth(mode = 'signin') {
   $('reset-screen').hidden = true;
   $('auth-sub').textContent = mode === 'signin' ? 'Sign in to reach your entries.'
     : mode === 'signup' ? 'Create an account to get started.'
-    : 'Enter your email and we’ll send you a reset link.'; // forgot
+    : 'Enter your email and we’ll send you a reset link.';
   $('auth-submit').textContent = mode === 'signin' ? 'Sign in'
     : mode === 'signup' ? 'Create account' : 'Send reset link';
   $('auth-toggle').textContent = mode === 'signin' ? 'Need an account? Create one'
@@ -2204,42 +2502,29 @@ function paintAuth(mode = 'signin') {
   $('auth-password').autocomplete = mode === 'signin' ? 'current-password' : 'new-password';
   $('auth-form').dataset.mode = mode;
 
-  // The confirm-password field only makes sense when creating an account.
   const isSignup = mode === 'signup';
   $('auth-confirm-label').hidden = !isSignup;
   $('auth-confirm-wrap').hidden = !isSignup;
   if (!isSignup) $('auth-password-confirm').value = '';
 
-  // Same hidden+required pairing as above -- the checkbox has to actually
-  // block submission at signup (real, informed consent, not just a line
-  // of text next to the button), but must never block sign-in/forgot,
-  // where it's hidden. Reset to unchecked leaving signup too, so
-  // switching away and back never carries over a stale "agreed" state.
   $('auth-legal-wrap').hidden = !isSignup;
   $('auth-privacy-check').required = isSignup;
   if (!isSignup) $('auth-privacy-check').checked = false;
 
-  // Forgot-password mode needs only the email field — no password to sign
-  // in with yet. Clearing `required` here matters: a hidden-but-required
-  // field silently blocks form submission (the browser's native validation
-  // popup can't even be seen), not just a cosmetic hide.
   const isForgot = mode === 'forgot';
   const passwordWrap = $('auth-password').closest('.password-wrap');
   passwordWrap.hidden = isForgot;
-  passwordWrap.previousElementSibling.hidden = isForgot; // its <label>
+  passwordWrap.previousElementSibling.hidden = isForgot;
   $('auth-password').required = !isForgot;
   if (isForgot) $('auth-password').value = '';
   $('auth-forgot').hidden = mode !== 'signin';
 
-  // Re-mask both fields on every mode switch, so a password shown before
-  // switching forms doesn't stay visible without the person noticing.
   setPasswordVisible('auth-password', false);
   setPasswordVisible('auth-password-confirm', false);
 }
 
-/** Same push-then-paint pattern as showAuth() above, for going back to the
- *  public homepage — e.g. pressing browser back from #/sign-in. */
 function showHomepage() {
+  exitDemo(false);
   const hash = '#/';
   if (window.location.hash !== hash && window.location.hash !== '') window.location.hash = hash;
   else paintHomepage();
@@ -2252,7 +2537,45 @@ function paintHomepage() {
   $('app').hidden = true;
 }
 
-/** Shared by both password fields — flips one input between masked and plain text. */
+/**
+ * Enters the interactive Sample Compendium without requiring an account.
+ * Visitors can browse 8 interconnected entries, click [[wiki-links]], test
+ * the Link map, switch themes, or draft an entry in memory.
+ */
+async function startDemo(initialEntryId = null) {
+  State.demo = true;
+  const { entries, links } = cloneSampleCompendium();
+  State.entries = entries;
+  State.links = links;
+
+  $('homepage').hidden = true;
+  $('auth-screen').hidden = true;
+  $('setup-screen').hidden = true;
+  $('verified-screen').hidden = true;
+  $('reset-screen').hidden = true;
+  $('app').hidden = false;
+  $('app').classList.add('demo-mode');
+  $('demo-banner').hidden = false;
+
+  applyTheme();
+  if (initialEntryId) {
+    go({ name: 'detail', id: initialEntryId });
+  } else {
+    go({ name: 'list' });
+  }
+}
+
+function exitDemo(goHome = true) {
+  if (!State.demo) return;
+  State.demo = false;
+  State.entries = [];
+  State.links = [];
+  State.form = null;
+  $('app').classList.remove('demo-mode');
+  $('demo-banner').hidden = true;
+  if (goHome) showHomepage();
+}
+
 function setPasswordVisible(inputId, visible) {
   const input = $(inputId);
   const toggle = $(inputId + '-toggle');
@@ -2299,10 +2622,6 @@ function wireAuth() {
       });
       submit.disabled = false;
       submit.textContent = 'Send reset link';
-      // Same message either way an address exists or not — Supabase's
-      // resetPasswordForEmail doesn't reveal that, on purpose (it's how
-      // this form avoids becoming a way to check who has an account), and
-      // this follows suit rather than branching on data/error here.
       errBox.textContent = error ? error.message
         : 'If that email has an account, a reset link is on its way.';
       errBox.hidden = false;
@@ -2369,15 +2688,15 @@ function wireAuth() {
       errBox.hidden = false;
       return;
     }
-    // The recovery link already left them signed in (that's what the
-    // PASSWORD_RECOVERY session is) — updateUser() just turned that
-    // temporary session into a normal one, so there's nothing left to sign
-    // in again for. Straight into the app, same as any other sign-in.
     toast('Password updated');
     await start(data.user);
   });
 
   $('btn-signout').addEventListener('click', async () => {
+    if (State.demo) {
+      exitDemo(true);
+      return;
+    }
     await State.sb.auth.signOut();
     State.user = null;
     State.entries = [];
@@ -2388,6 +2707,7 @@ function wireAuth() {
 /* ── Boot ──────────────────────────────────────────────────────── */
 
 async function start(user) {
+  exitDemo(false);
   State.user = user;
   $('homepage').hidden = true;
   $('auth-screen').hidden = true;
@@ -2395,12 +2715,6 @@ async function start(user) {
   $('verified-screen').hidden = true;
   $('app').hidden = false;
 
-  // A stale #/sign-in (etc.) from before this session existed — e.g. a
-  // bookmark made while logged out, opened again after signing in
-  // elsewhere — means nothing to the signed-in app's own router and would
-  // just sit there unexplained. readHash() would silently fall through to
-  // its 'list' default either way; this just makes the address bar match
-  // what's actually on screen.
   if (readAuthHash()) history.replaceState(null, '', window.location.pathname);
 
   try {
@@ -2412,10 +2726,6 @@ async function start(user) {
     toast(err.message || 'Could not load your entries', true);
   }
 
-  // Kept separate from the block above on purpose: until
-  // supabase-schema-02-profiles.sql has been run, this table doesn't
-  // exist yet, and that should never produce a scary, unrelated-looking
-  // error about your entries.
   try {
     await Data.loadProfile();
   } catch {
@@ -2435,6 +2745,10 @@ function wireChrome() {
   $('btn-import').addEventListener('click', () => go({ name: 'import' }));
   $('btn-settings').addEventListener('click', () => go({ name: 'settings' }));
   $('btn-export').addEventListener('click', exportEverything);
+  $('btn-export-md').addEventListener('click', exportMarkdown);
+
+  $('demo-signup').addEventListener('click', () => showAuth('signup'));
+  $('demo-exit').addEventListener('click', () => exitDemo(true));
 
   let searchTimer = 0;
   $('search').addEventListener('input', (ev) => {
@@ -2458,36 +2772,51 @@ function wireChrome() {
     if ($('sidebar').classList.contains('open')) setSidebarOpen(false);
   });
 
-  // Guarded on State.user because the pre-auth screens have their own
-  // hashchange listener (see wireHomepage()) — without the guard, a
-  // logged-out visitor's #/sign-in etc. would also run render() into the
-  // (hidden) #app, harmlessly wasted work at best.
   window.addEventListener('hashchange', async () => {
-    if (!State.user) return;
+    if (!State.user && !State.demo) return;
+    if (State.demo) {
+      const authMode = readAuthHash();
+      if (authMode) {
+        exitDemo(false);
+        paintAuth(authMode);
+        return;
+      }
+      if (window.location.hash === '#/' || window.location.hash === '') {
+        exitDemo(false);
+        paintHomepage();
+        return;
+      }
+    }
     State.view = readHash();
     await render();
   });
 }
 
-/**
- * The public homepage's own four exits — all of them just hand off to the
- * existing auth machinery via showAuth(), which now owns updating the
- * hash itself. Also owns the pre-auth side of hash routing: back/forward
- * between the homepage and the sign-in/sign-up/forgot-password screens
- * (previously neither the address bar nor the browser's back button did
- * anything for these screens, since nothing ever touched the hash).
- */
 function wireHomepage() {
   $('home-signin').addEventListener('click', () => showAuth('signin'));
   $('home-cta-signin').addEventListener('click', () => showAuth('signin'));
   $('home-cta-start').addEventListener('click', () => showAuth('signup'));
   $('home-cta-start-2').addEventListener('click', () => showAuth('signup'));
+  $('home-cta-demo').addEventListener('click', () => startDemo());
+  $('home-cta-demo-2').addEventListener('click', () => startDemo());
 
-  // Guarded the opposite way from wireChrome()'s listener above — once
-  // State.user is set, the signed-in app owns hash routing entirely, and
-  // this must not fight it (e.g. by repainting the homepage over #app).
+  for (const card of document.querySelectorAll('.home-proof-card[data-sample-id]')) {
+    const sampleId = card.dataset.sampleId;
+    card.addEventListener('click', () => startDemo(sampleId));
+    card.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        startDemo(sampleId);
+      }
+    });
+  }
+
   window.addEventListener('hashchange', () => {
-    if (State.user) return;
+    if (State.user || State.demo) return;
+    if (window.location.hash === '#/sample') {
+      startDemo();
+      return;
+    }
     const mode = readAuthHash();
     if (mode) paintAuth(mode);
     else paintHomepage();
@@ -2504,14 +2833,6 @@ async function boot() {
 
   State.sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 
-  // Registered before anything else touches auth, so it's already in place
-  // before supabase-js finishes processing a "reset your password" link's
-  // token from the URL and fires this. See showResetScreen() for why this
-  // event, rather than parsing the URL the way isEmailConfirmationRedirect()
-  // below does — a recovery link leaves a real, valid session (that's the
-  // whole mechanism), so without this the plain `data.session?.user` check
-  // near the bottom would just drop them into the app with their old
-  // password still live, instead of onto the "choose a new password" form.
   let isRecovery = false;
   State.sb.auth.onAuthStateChange((event) => {
     if (event === 'PASSWORD_RECOVERY') isRecovery = true;
@@ -2524,10 +2845,6 @@ async function boot() {
   const confirming = isEmailConfirmationRedirect();
   const { data } = await State.sb.auth.getSession();
 
-  // Both link types leave a token sitting in the address bar that
-  // supabase-js has already read by the time we get here, so it serves no
-  // further purpose — and leaving it visible is a needless way to leak a
-  // session if that URL is ever copied, screenshotted, or shared.
   if (confirming || isRecovery) {
     history.replaceState(null, '', window.location.pathname);
   }
@@ -2546,11 +2863,11 @@ async function boot() {
     return;
   }
 
-  // No forced showAuth('signin') here on purpose — #homepage is already
-  // the visible-by-default state in the raw HTML (see its comment in
-  // index.html). The one thing still needed: honoring a bookmarked or
-  // refreshed #/sign-in (etc.) URL, so it opens straight to that screen
-  // instead of flashing the homepage first and jumping a moment later.
+  if (window.location.hash === '#/sample') {
+    await startDemo();
+    return;
+  }
+
   const mode = readAuthHash();
   if (mode) paintAuth(mode);
 }

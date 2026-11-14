@@ -60,47 +60,19 @@ button, input, textarea, select { font: inherit; color: inherit; }
    room (Card Catalog, tuned over several deliberate passes — see
    THEME_PRESETS in app.js); the public pages are a bright, paper-and-ink
    pitch FOR that room, on purpose, and scoped to only these four pages
-   so the app's already-settled palette is untouched. Same "one fixed
-   look regardless of anyone's in-app theme" reasoning as before, just
-   built on different values -- and specifically not the dark-navy/blue-
-   accent combination the app uses, both because that's already spoken
-   for and because it's arguably the single most common "modern tech
-   product" palette on the web; the paper ground is a real point of view,
-   not a rejection of the app's colors. */
+   so the app's already-settled palette is untouched. */
 #homepage {
   --mkt-paper: #f3f5f7; --mkt-paper-raised: #ffffff;
   --mkt-ink: #14181f; --mkt-ink-dim: #565f6e; --mkt-ink-faint: #8b93a1;
   --mkt-rule: #dde2e8;
-  /* Sampled directly from Logo 1.1.png's gradient (light node ~#5ba3fa,
-     dark node ~#0038fb), then matched against the user-supplied swatch
-     sheets by nearest color distance -- Neon Azure for the dark end,
-     Bright Cornflower for the light end -- rather than an approximation. */
   --mkt-accent: #0a29fa; --mkt-accent-light: #73a4f0;
   --mkt-stamp: #c23b2e;
 
   color: var(--mkt-ink-dim); font-family: var(--font-ui);
   background-color: var(--mkt-paper);
-  /* A faint dot grid instead of the glow-blob background this used to
-     have -- graph-paper/index-card texture, on-subject for a catalogue,
-     and (unlike 30 random radial gradients) cheap enough not to think
-     twice about. This is also the fallback: homepage.js replaces it with
-     a live <canvas> version of the same grid (see .home-bg-live below)
-     when it can, but if JS is off/blocked/errors, this static version
-     is what stays -- same look either way, just not interactive. */
   background-image: radial-gradient(circle at 1px 1px, var(--mkt-rule) 1.2px, transparent 0);
   background-size: 30px 30px;
 }
-/* homepage.js adds this once its <canvas> is actually up and drawing --
-   not on .mkt-js alone, so a canvas/JS failure still leaves the plain
-   CSS grid above visible rather than nothing. */
-/* transparent, not just background-image:none -- #homepage's own solid
-   background-color paints ON TOP of a negative-z-index fixed descendant
-   (that's just how CSS stacking order works: a stacking context's own
-   background paints after its negative-z-index children), so leaving
-   background-color set here would silently hide the canvas completely
-   behind an opaque paper-colored rectangle. The canvas fills its own
-   paper-color background every frame instead (see homepage.js draw()),
-   so it doesn't need #homepage's background at all once it's live. */
 #homepage.home-bg-live { background: transparent; }
 .home-bg-canvas { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 
@@ -125,9 +97,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .home-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 22px 28px; border-bottom: 1px solid var(--mkt-rule);
+  gap: 16px; flex-wrap: wrap;
 }
 .home-wordmark { font-family: var(--font-body); font-weight: 700; font-size: 1.267rem; letter-spacing: 0.08em; color: var(--mkt-ink); }
-.home-nav { display: flex; align-items: center; gap: 24px; }
+.home-nav { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .home-nav-link {
   position: relative;
   font-family: var(--font-mono); font-size: 0.867rem; color: var(--mkt-ink-dim);
@@ -142,29 +115,16 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .home-nav-link:hover::after { right: 0; }
 
-/* ── Motion ─────────────────────────────────────────────────────────
-   Two separate mechanisms, both progressive enhancement:
-   1. The hero's own elements (eyebrow/headline/subhead/CTA/proof cards)
-      rise in on page load via a plain CSS animation, staggered by
-      animation-delay -- always runs, no JS needed.
-   2. Everything below the fold (.mkt-reveal: feature cards, the closing
-      line) only starts hidden once .mkt-js is present on <html> -- added
-      by a tiny synchronous inline script in <head> (see index.html etc.),
-      not by homepage.js at the bottom of the page, specifically so there
-      is no flash of visible-then-hidden content while the page loads.
-      If JS never runs at all (disabled, blocked, errors), .mkt-js is
-      never added, .mkt-reveal content simply stays visible -- no motion,
-      but nothing is ever lost. homepage.js (loaded at the bottom, like
-      newsletter.js) then adds .mkt-visible via IntersectionObserver as
-      each section scrolls into view. */
+/* ── Motion ───────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
-  .home-eyebrow, .home-headline, .home-subhead, .home-cta-row, .home-proof {
+  .home-eyebrow, .home-headline, .home-subhead, .home-cta-row, .home-proof-hint, .home-proof {
     opacity: 0; animation: mkt-rise 0.7s cubic-bezier(0.16,1,0.3,1) forwards;
   }
   .home-eyebrow { animation-delay: 0.05s; }
   .home-headline { animation-delay: 0.16s; }
   .home-subhead { animation-delay: 0.3s; }
   .home-cta-row { animation-delay: 0.42s; }
+  .home-proof-hint { animation-delay: 0.48s; }
   .home-proof { animation-delay: 0.54s; }
 
   .mkt-js .mkt-reveal { opacity: 0; transform: translateY(20px); }
@@ -184,8 +144,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 .home-hero { padding: 6rem 0 3rem; position: relative; }
 @media (prefers-reduced-motion: no-preference) {
-  /* Primary hero CTA only (not every .btn-primary site-wide) -- a slow
-     radiating ping to draw the eye, not a strobe. */
   .home-cta-row .btn-primary { animation: mkt-cta-pulse 2.8s ease-in-out 2.2s infinite; }
 }
 
@@ -198,8 +156,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   line-height: 0.96; letter-spacing: -0.015em; color: var(--mkt-ink); margin: 0 0 26px;
   text-wrap: balance; max-width: 15ch;
 }
-.home-subhead { font-size: 1.2rem; color: var(--mkt-ink-dim); max-width: 52ch; line-height: 1.7; margin: 0 0 34px; }
-.home-cta-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 68px; }
+.home-subhead { font-size: 1.2rem; color: var(--mkt-ink-dim); max-width: 54ch; line-height: 1.7; margin: 0 0 34px; }
+.home-cta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 52px; }
 .home-cta-secondary {
   font-family: var(--font-mono); font-size: 0.867rem; color: var(--mkt-ink-faint);
   background: none; border: 0; cursor: pointer;
@@ -208,15 +166,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .home-cta-secondary:hover { color: var(--mkt-ink); }
 
+.home-proof-hint {
+  font-family: var(--font-mono); font-size: 0.76rem; color: var(--mkt-ink-faint);
+  letter-spacing: 0.04em; text-align: center; margin-bottom: 4px;
+}
 .home-proof {
   display: flex; gap: 26px; flex-wrap: wrap;
-  justify-content: center; padding: 24px 10px 8px;
+  justify-content: center; padding: 16px 10px 8px;
 }
 .home-proof-card {
   position: relative; width: 300px; background: var(--mkt-paper-raised);
-  border: 1px solid var(--mkt-rule); border-radius: 6px; padding: 20px 22px 22px;
+  border: 1px solid var(--mkt-rule); border-radius: 6px; padding: 20px 22px 20px;
   box-shadow: 0 1px 2px rgba(20,24,31,0.04), 0 8px 20px rgba(20,24,31,0.05);
   transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: pointer; display: flex; flex-direction: column;
 }
 
 /* Soft radial glow that tracks the cursor -- created by homepage.js,
@@ -241,10 +204,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .home-proof-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .home-proof-stamp { flex-shrink: 0; }
-/* The ring + its orbiting label text turn slowly, like a real library
-   date-stamp -- the center abbreviation (HIS/BIO/1687) lives outside
-   this group in the markup specifically so IT stays upright and
-   readable while only the ring around it spins. */
 .home-proof-stamp-ring { transform-box: view-box; transform-origin: 30px 30px; }
 @media (prefers-reduced-motion: no-preference) {
   .home-proof-stamp-ring { animation: mkt-spin 26s linear infinite; }
@@ -252,14 +211,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
   .home-proof-card:nth-child(3) .home-proof-stamp-ring { animation-duration: 22s; }
 }
 .home-proof-title { font-family: var(--font-body); font-weight: 800; font-size: 1.2rem; color: var(--mkt-ink); line-height: 1.15; }
-.home-proof-summary { font-size: 0.867rem; color: var(--mkt-ink-dim); line-height: 1.6; margin-bottom: 12px; }
+.home-proof-summary { font-size: 0.867rem; color: var(--mkt-ink-dim); line-height: 1.6; margin-bottom: 14px; flex: 1; }
+.home-proof-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 .home-proof-tags { display: flex; gap: 9px; flex-wrap: wrap; }
 .home-proof-tag { font-family: var(--font-mono); font-size: 0.733rem; color: var(--mkt-accent); border-bottom: 1px solid var(--mkt-accent-light); padding-bottom: 1px; }
+.home-proof-open {
+  font-family: var(--font-mono); font-size: 0.733rem; color: var(--mkt-ink-faint);
+  white-space: nowrap; transition: color 0.15s ease, transform 0.15s ease;
+}
+.home-proof-card:hover .home-proof-open { color: var(--mkt-accent); transform: translateX(2px); }
 
 .home-features { padding: 6.4rem 0 5rem; border-top: 1px solid var(--mkt-rule); margin-top: 48px; }
 .home-features-h2 {
   font-family: var(--font-body); font-weight: 800; font-size: clamp(1.8rem, 3.6vw, 2.5rem);
-  color: var(--mkt-ink); margin: 0 0 52px; max-width: 20ch; text-wrap: balance;
+  color: var(--mkt-ink); margin: 0 0 52px; max-width: 22ch; text-wrap: balance;
 }
 .home-feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 44px 48px; }
 @media (max-width: 700px) { .home-feature-grid { grid-template-columns: 1fr; } }
@@ -273,6 +238,27 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .home-feature-grid > div:hover .home-feature-title::after { width: 60px; }
 .home-feature-body { font-size: 1rem; color: var(--mkt-ink-dim); line-height: 1.75; max-width: 44ch; }
+
+/* ── Use-case showcase ─────────────────────────────────────────────── */
+.home-usecases { padding: 5.4rem 0 4.6rem; border-top: 1px solid var(--mkt-rule); }
+.home-usecase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+@media (max-width: 840px) { .home-usecase-grid { grid-template-columns: 1fr; } }
+.home-usecase-card {
+  background: var(--mkt-paper-raised); border: 1px solid var(--mkt-rule);
+  border-radius: var(--radius-lg); padding: 26px 24px;
+  box-shadow: 0 1px 2px rgba(20,24,31,0.03), 0 8px 20px rgba(20,24,31,0.04);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.home-usecase-card:hover { transform: translateY(-2px); border-color: var(--mkt-accent-light); }
+.home-usecase-kicker {
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mkt-accent); margin-bottom: 10px;
+}
+.home-usecase-title {
+  font-family: var(--font-body); font-weight: 800; font-size: 1.25rem;
+  color: var(--mkt-ink); line-height: 1.2; margin-bottom: 10px;
+}
+.home-usecase-body { font-size: 0.933rem; color: var(--mkt-ink-dim); line-height: 1.68; }
 
 .home-closing {
   border-top: 1px solid var(--mkt-rule); padding: 5rem 0 5.4rem;
@@ -327,7 +313,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .home-newsletter-msg { display: block; margin-top: 8px; }
 
 /* ── Sign-in and setup ──────────────────────────────────────────── */
-#auth-screen, #setup-screen {
+#auth-screen, #setup-screen, #verified-screen, #reset-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   padding: 24px;
 }
@@ -342,11 +328,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
   font-family: var(--font-body); font-size: 1.333rem; font-weight: 400;
   color: var(--accent); letter-spacing: 0.14em; text-align: center;
 }
-/* Only the sign-in screen's wordmark is a real button (id="auth-logo-home")
-   — a "click the logo to go home" link, the way most sites work. The
-   others (verified/reset/setup screens) stay plain headings; those are
-   one-time landing points from an email link, not something worth adding
-   a way to wander off from mid-flow. */
 button.auth-logo {
   background: none; border: 0; padding: 0; cursor: pointer; width: 100%;
 }
@@ -396,6 +377,23 @@ code {
   display: grid; grid-template-columns: 236px 1fr;
   grid-template-rows: 54px 1fr; height: 100vh; overflow: hidden;
 }
+#app.demo-mode {
+  grid-template-rows: auto 54px 1fr;
+}
+.demo-banner {
+  grid-column: 1 / -1;
+  background: var(--bg2); border-bottom: 1px solid var(--border2);
+  padding: 7px 18px; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; font-size: 0.83rem; color: var(--text1);
+}
+.demo-banner-text { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.demo-badge {
+  font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase;
+  letter-spacing: 0.08em; padding: 2px 7px; border-radius: var(--radius);
+  background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent);
+}
+.demo-banner-actions { display: flex; align-items: center; gap: 8px; }
+
 #btn-menu { display: none; }
 
 /* Below 780px the sidebar no longer fits as a permanent column — it
@@ -410,8 +408,10 @@ code {
     transform: translateX(-100%); transition: transform 0.18s ease;
     z-index: 140; box-shadow: 3px 0 20px #0008;
   }
+  #app.demo-mode #sidebar { top: 96px; }
   #sidebar.open { transform: translateX(0); }
   #sidebar-backdrop { position: fixed; top: 54px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 130; }
+  #app.demo-mode #sidebar-backdrop { top: 96px; }
 }
 
 #topbar {
@@ -460,7 +460,7 @@ code {
 .side-item.active { background: var(--accent-dim); border-color: var(--accent2); color: var(--accent); }
 .side-count { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text3); background: var(--bg3); padding: 1px 7px; border-radius: 10px; }
 .side-divider { height: 1px; background: var(--border); margin: 8px 12px; }
-.side-foot { margin-top: auto; padding: 12px; }
+.side-foot { margin-top: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
 .side-foot .btn { width: 100%; }
 
 /* ── Main ───────────────────────────────────────────────────────── */
@@ -479,10 +479,6 @@ code {
   font-family: var(--font-ui); white-space: nowrap;
 }
 .btn:hover { border-color: var(--border2); color: var(--text0); }
-/* accent_ink (set per-preset in app.js) is whichever of bg0/text0 actually
-   reads legibly on THIS theme's accent fill — a bright accent needs dark
-   text, a dark one needs light text, and it varies per preset. var(--bg0)
-   stays as the fallback for a theme saved before this field existed. */
 .btn-primary { background: var(--accent); color: var(--accent-ink, var(--bg0)); border-color: var(--accent); }
 .btn-primary:hover { filter: brightness(1.1); color: var(--accent-ink, var(--bg0)); }
 .btn-danger { color: var(--coral); }
@@ -509,13 +505,6 @@ code {
   display: flex; gap: 14px; align-items: flex-start;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-/* A cheap, CSS-only lift — not the cursor-tracked 3D tilt from the design
-   pass. That's a fine trick for three cards in a pitch deck; across a list
-   of a few hundred entries a mousemove listener per row and a constant
-   tilt-on-hover would cost real performance and, more to the point, get
-   annoying fast when you're just scanning down a list. Depth without the
-   theatrics here — see categoryStamp() in app.js for where the fuller
-   treatment actually landed instead. */
 .entry-card:hover {
   border-color: var(--border2); transform: translateY(-2px);
   box-shadow: 0 10px 22px -12px rgba(0,0,0,0.5);
@@ -523,11 +512,6 @@ code {
 .entry-card-body { flex: 1; min-width: 0; }
 .entry-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .entry-card-title { font-family: var(--font-title, var(--font-body)); font-weight: 800; font-size: 1.2rem; color: var(--text0); }
-/* The entry's category, shown as a plain-text badge next to its title in
-   the list — see categoryStamp() for the circular version on the detail
-   page, which is deliberately NOT wired to --font-categories: that's a
-   stylized library-stamp graphic sharing --font-mono with .tag-pill on
-   purpose, not a place where a chosen reading font belongs. */
 .pill {
   font-family: var(--font-categories, var(--font-mono)); font-size: 0.7rem; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--text2); background: none;
@@ -540,9 +524,6 @@ code {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .entry-card-foot { display: flex; align-items: center; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
-/* Tags read as typed words with a rule under them, not filled badges —
-   see the note on .tag-pill's old "-dim" background in the design
-   writeup this replaced. */
 .tag-pill {
   font-family: var(--font-tags, var(--font-mono)); font-size: 0.7rem; color: var(--teal);
   background: none; border: 0; border-bottom: 1px solid var(--teal);
@@ -559,15 +540,8 @@ code {
 .back-link:hover { color: var(--text1); }
 .detail-hero { display: flex; gap: 22px; align-items: flex-start; margin-bottom: 22px; flex-wrap: wrap; }
 .detail-title { font-family: var(--font-title, var(--font-body)); font-size: clamp(1.9rem, 4vw, 2.7rem); font-weight: 900; color: var(--text0); line-height: 0.98; margin-bottom: 10px; letter-spacing: -0.01em; }
-/* The detail page's Summary block specifically (not Notes/body-text,
-   which the two share the plain .body-text class for) -- see viewDetail()
-   for why this extra class exists just on the summary one. */
 .entry-summary-text { font-family: var(--font-summary, var(--font-body)); }
 .detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 0.73rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text3); }
-/* The one circular badge on the page — see categoryStamp() in app.js.
-   Sized well below faceplate-lg (112px) on purpose, so it reads as the
-   category's own small mark rather than competing with the entry's
-   faceplate for the same "circular icon" role. */
 .detail-stamp { width: 64px; height: 64px; flex-shrink: 0; }
 .detail-stamp svg { width: 100%; height: 100%; display: block; }
 .actions { display: flex; gap: 9px; margin-bottom: 26px; flex-wrap: wrap; }
@@ -581,10 +555,44 @@ code {
   font-family: var(--font-body); font-size: 1.033rem; color: var(--text1);
   line-height: 1.78; white-space: pre-wrap; word-wrap: break-word;
 }
+.rich-body { white-space: normal; }
+.rich-para { margin: 0 0 14px; }
+.rich-para:last-child { margin-bottom: 0; }
+.rich-heading-2 {
+  font-family: var(--font-title, var(--font-body)); font-size: 1.35rem; font-weight: 800;
+  color: var(--text0); margin: 22px 0 8px; line-height: 1.25;
+}
+.rich-heading-3 {
+  font-family: var(--font-title, var(--font-body)); font-size: 1.12rem; font-weight: 700;
+  color: var(--text0); margin: 16px 0 6px; line-height: 1.3;
+}
+.rich-heading-2:first-child, .rich-heading-3:first-child { margin-top: 0; }
+.rich-list {
+  margin: 0 0 14px; padding-left: 1.35em;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.rich-quote {
+  margin: 14px 0; padding: 10px 16px; border-left: 3px solid var(--accent);
+  background: var(--bg2); border-radius: 0 var(--radius) var(--radius) 0;
+  font-style: italic; color: var(--text2);
+}
+.wiki-link {
+  display: inline; background: none; border: 0; padding: 0 1px;
+  font: inherit; color: var(--accent); cursor: pointer;
+  border-bottom: 1px solid var(--accent);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wiki-link:hover { background: var(--accent-dim); }
+.wiki-link.unresolved {
+  color: var(--text2); border-bottom: 1px dashed var(--text3);
+}
+.wiki-link.unresolved:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
 /* The illuminated-capital treatment reference books use to mark "an entry
    starts here" — applied to exactly one block per page (see viewDetail()),
    never every .body-text, so it stays a single moment, not a repeated tic. */
-.body-text-lead::first-letter {
+.body-text-lead:not(.rich-body)::first-letter,
+.body-text-lead.rich-body > .rich-para:first-child::first-letter {
   font-family: var(--font-body); font-weight: 900; font-size: 3.2em; line-height: 0.75;
   float: left; padding: 4px 8px 0 0; color: var(--accent);
 }
@@ -603,9 +611,6 @@ code {
 .linked-entry-info { flex: 1; min-width: 0; }
 .linked-entry-title { font-size: 0.933rem; color: var(--text1); }
 .linked-entry-rel { font-size: 0.8rem; color: var(--text3); font-style: italic; }
-/* Suggested-links rows reuse .linked-entry's layout but aren't themselves
-   clickable — only the "+ Add" button inside is — so the row-level pointer
-   cursor and hover border from the base class don't apply here. */
 .suggestion-row { cursor: default; }
 .suggestion-row:hover { border-color: var(--border); }
 
@@ -635,6 +640,11 @@ code {
 }
 .import-row-head { display: flex; align-items: center; gap: 10px; }
 .import-warn { font-family: var(--font-mono); font-size: 0.75rem; color: var(--coral); }
+.import-file-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 12px 14px; background: var(--bg1);
+  border: 1px dashed var(--border2); border-radius: var(--radius-lg);
+}
 
 /* Custom fields */
 .fields-list { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; }
@@ -707,12 +717,6 @@ code {
   padding: 6px 10px; color: var(--text0); font-size: 0.867rem; outline: none; flex: 1; min-width: 0;
 }
 .fp-color { width: 38px; height: 32px; border-radius: var(--radius); border: 1px solid var(--border); cursor: pointer; padding: 2px; background: none; flex-shrink: 0; }
-/* Drop target for the faceplate image — dashed rather than .fp-input's
-   solid border specifically to read as "things can land here", the same
-   visual convention file-upload zones use everywhere. Focusable (see the
-   tabindex in app.js) so it can receive a paste event; :focus-visible
-   reuses the ring the rest of the app already defines rather than a
-   bespoke one. */
 .fp-dropzone {
   flex: 1; min-width: 0; border: 1px dashed var(--border2); border-radius: var(--radius);
   padding: 10px 12px; transition: border-color 0.15s ease, background 0.15s ease;
@@ -733,12 +737,33 @@ code {
 .color-row input[type=color] { width: 40px; height: 30px; border-radius: var(--radius); border: 1px solid var(--border); cursor: pointer; padding: 2px; background: none; }
 
 /* ── Link map ───────────────────────────────────────────────────── */
-#graph-canvas { display: block; width: 100%; height: calc(100vh - 54px); cursor: grab; }
+.graph-wrap { position: relative; width: 100%; height: calc(100vh - 54px); overflow: hidden; }
+#app.demo-mode .graph-wrap { height: calc(100vh - 94px); }
+.graph-toolbar {
+  position: absolute; top: 14px; left: 16px; right: 16px; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap; pointer-events: none;
+}
+.graph-filters, .graph-controls {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  pointer-events: auto; background: var(--bg1); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 6px 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+.graph-filter-btn {
+  font-family: var(--font-mono); font-size: 0.72rem; padding: 3px 9px;
+  border-radius: var(--radius); border: 1px solid transparent;
+  background: none; color: var(--text2); cursor: pointer;
+}
+.graph-filter-btn:hover { color: var(--text0); background: var(--bg2); }
+.graph-filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+#graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 #graph-canvas:active { cursor: grabbing; }
 
 /* ── Misc ───────────────────────────────────────────────────────── */
 .empty { text-align: center; padding: 70px 20px; color: var(--text3); }
 .empty-title { font-family: var(--font-body); font-size: 1.2rem; color: var(--text2); margin-bottom: 8px; }
+.empty-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 
 #toast {
   position: fixed; bottom: 22px; right: 22px; background: var(--bg3);
@@ -764,3 +789,15 @@ code {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* ── Print / Typeset Reference Sheet ────────────────────────────── */
+@media print {
+  body { background: #fff !important; color: #111 !important; }
+  #homepage, #auth-screen, #verified-screen, #reset-screen, #setup-screen,
+  #topbar, #sidebar, #sidebar-backdrop, #demo-banner, #toast, #modal-overlay,
+  .back-link, .actions { display: none !important; }
+  #app { display: block !important; height: auto !important; overflow: visible !important; }
+  #main { overflow: visible !important; background: #fff !important; }
+  .panel { max-width: 100% !important; padding: 0 !important; }
+  .linked-entry { break-inside: avoid; border-color: #ccc !important; background: #fafafa !important; }
+}
