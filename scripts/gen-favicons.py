@@ -10,6 +10,7 @@ PNG favicons at the standard sizes, and the apple-touch-icon iOS looks
 for by convention.
 """
 
+import base64
 from pathlib import Path
 from PIL import Image
 
@@ -35,5 +36,30 @@ save_png(180, ROOT / "apple-touch-icon.png")  # root path is what iOS looks for 
 print("Generating favicon.ico (16/32/48 bundled together):")
 src.save(ROOT / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
 print(f"  {(ROOT / 'favicon.ico').relative_to(ROOT)}")
+
+print("Generating adaptive SVG favicon:")
+# Embed the raster alpha mask so an SVG loaded as a browser icon has no
+# external dependencies. Theme colors change without altering the artwork.
+mark = base64.b64encode((ICONS / "favicon-192.png").read_bytes()).decode("ascii")
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .tile {{ fill: none; }}
+    .mark {{ fill: #0a29fa; }}
+    @media (prefers-color-scheme: dark) {{
+      .tile {{ fill: #111111; }}
+      .mark {{ fill: #ffffff; }}
+    }}
+  </style>
+  <defs>
+    <mask id="mark" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64" style="mask-type: alpha">
+      <image x="4" y="4" width="56" height="56" href="data:image/png;base64,{mark}"/>
+    </mask>
+  </defs>
+  <rect class="tile" width="64" height="64" rx="12"/>
+  <rect class="mark" width="64" height="64" mask="url(#mark)"/>
+</svg>
+'''
+(ICONS / "favicon.svg").write_text(svg)
+print("  icons/favicon.svg (blue in light mode; white on a dark tile in dark mode)")
 
 print("Done.")
