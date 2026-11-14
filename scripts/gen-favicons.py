@@ -4,7 +4,7 @@ dependencies" pledge (see README). Run once by hand whenever the source
 logo changes; needs Pillow (`pip install --user Pillow`), which nothing
 else in the project needs or assumes.
 
-Takes "Logo 1.1.png" (the source artwork) and produces every favicon
+Takes "icons/favicon-source.png" (the square icon artwork) and produces every favicon
 asset the HTML <link> tags reference: a multi-resolution favicon.ico,
 PNG favicons at the standard sizes, and the apple-touch-icon iOS looks
 for by convention.
@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "Logo 1.1.png"
+SRC = ROOT / "icons" / "favicon-source.png"
 ICONS = ROOT / "icons"
 ICONS.mkdir(exist_ok=True)
 

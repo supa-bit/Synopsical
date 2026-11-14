@@ -99,7 +99,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
   padding: 22px 28px; border-bottom: 1px solid var(--mkt-rule);
   gap: 16px; flex-wrap: wrap;
 }
-.home-wordmark { font-family: var(--font-body); font-weight: 700; font-size: 1.267rem; letter-spacing: 0.08em; color: var(--mkt-ink); }
+.home-wordmark { display: inline-flex; text-decoration: none; flex-shrink: 0; }
+.brand-lockup { display: block; width: 210px; height: 40px; object-fit: cover; }
+.brand-icon { display: inline-block; width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; vertical-align: middle; }
 .home-nav { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .home-nav-link {
   position: relative;
@@ -325,8 +327,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .setup-card { max-width: 480px; }
 .auth-logo {
-  font-family: var(--font-body); font-size: 1.333rem; font-weight: 400;
-  color: var(--accent); letter-spacing: 0.14em; text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-size: 1.333rem; font-weight: 700;
+  color: var(--accent); text-align: center;
 }
 button.auth-logo {
   background: none; border: 0; padding: 0; cursor: pointer; width: 100%;
@@ -421,11 +424,13 @@ code {
   display: flex; align-items: center; gap: 12px; padding: 0 18px;
 }
 .logo {
-  font-family: var(--font-body); font-size: 1.067rem; color: var(--accent);
-  letter-spacing: 0.1em; background: none; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-body); font-size: 1.067rem; font-weight: 700; color: var(--accent);
+  background: none; border: 0; cursor: pointer;
   flex-shrink: 0; white-space: nowrap;
 }
 .logo span { color: var(--text3); font-size: 0.733rem; margin-left: 8px; letter-spacing: 0.08em; }
+.logo .brand-icon { width: 26px; height: 26px; }
 
 #search-wrap { flex: 1; max-width: 420px; position: relative; }
 #search {

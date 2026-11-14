@@ -97,7 +97,7 @@ for (const f of JS_FILES) {
 if (failures === 0) ok(`${checkedCount} id reference(s) across ${JS_FILES.filter((f) => existsSync(join(ROOT, f))).length} JS files all resolve`);
 
 // ── 3. Local <script src>/<link href> targets actually exist ───────────
-section('Local <script src> / <link href> targets exist on disk');
+section('Local script, image, and stylesheet targets exist on disk');
 let assetChecks = 0;
 for (const f of HTML_FILES) {
   const path = join(ROOT, f);
@@ -105,12 +105,14 @@ for (const f of HTML_FILES) {
   const html = readFileSync(path, 'utf8');
   const refs = [
     ...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g),
+    ...html.matchAll(/<img[^>]+src=["']([^"']+)["']/g),
     ...html.matchAll(/<link[^>]+href=["']([^"']+)["']/g),
   ].map((m) => m[1]);
   for (const ref of refs) {
     if (/^https?:\/\//.test(ref)) continue; // remote (CDN, Google Fonts) — not ours to check
     assetChecks++;
-    if (!existsSync(join(ROOT, ref))) fail(`${f} references "${ref}" — file not found in repo`);
+    const localPath = ref.split(/[?#]/)[0];
+    if (!existsSync(join(ROOT, localPath))) fail(`${f} references "${ref}" — file not found in repo`);
   }
 }
 if (failures === 0) ok(`${assetChecks} local asset reference(s) all exist`);
