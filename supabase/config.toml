@@ -393,6 +393,12 @@ deno_version = 2
 [functions.subscribe-newsletter]
 verify_jwt = false
 
+# stripe-webhook is called by Stripe's servers (authenticated via the
+# HMAC-SHA256 `Stripe-Signature` header verified inside the function),
+# not by a browser holding a Supabase user JWT.
+[functions.stripe-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

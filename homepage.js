@@ -169,4 +169,13 @@
       window.addEventListener('resize', resize);
     }
   }
+
+  // ── 4. Pricing page Plus CTA wiring ─────────────────────────────
+  const plusCta = document.getElementById('pricing-plus-cta');
+  const payLink = (window.SYNOPSICAL_CONFIG && window.SYNOPSICAL_CONFIG.STRIPE_PLUS_PAYMENT_LINK || '').trim();
+  if (plusCta && payLink) {
+    plusCta.href = payLink;
+    plusCta.target = '_blank';
+    plusCta.rel = 'noopener';
+  }
 })();
