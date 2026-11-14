@@ -20,6 +20,18 @@
 import { parseImportBlock, parseImportText } from './lib/import-parser.mjs';
 import { parseRichBlocks, extractWikiLinks, entriesToMarkdown } from './lib/rich-text.mjs';
 import { cloneSampleCompendium } from './lib/sample-compendium.mjs';
+import {
+  findWikiReferences, findUnlinkedMentions, linkFirstMention,
+  wikiQueryAt, rankTitleMatches, applyWikiCompletion,
+} from './lib/backlinks.mjs';
+import {
+  slugify, validateHandle, buildPublicShareUrl, parsePublicHash,
+  buildStripeCheckoutUrl, normalizeAnalyticsEvent,
+} from './lib/sharing.mjs';
+import {
+  pickRandomEntry, selectResurfacedEntries, appendRevisionSnapshot,
+  parseQuickCaptureParams, buildBookmarkletHref,
+} from './lib/retention.mjs';
 
 /* ── Tiny DOM helpers ──────────────────────────────────────────── */
 
@@ -258,12 +270,16 @@ const Data = {
       .map((f, i) => ({ field_name: f.name.trim(), field_value: f.value ?? '', sort_order: i }));
     const cleanTagStrings = [...new Set(tagList.map((t) => t.trim()).filter(Boolean))];
 
+    const now = new Date().toISOString();
+    const entrySlug = slugify(draft.title) || null;
     if (State.demo) {
-      const now = new Date().toISOString();
       const id = editId || ('demo-' + crypto.randomUUID());
+      const existingEntry = editId ? State.entries.find((e) => e.id === editId) : null;
       const row = {
         id,
         title: draft.title,
+        slug: entrySlug,
+        is_public: draft.is_public ?? existingEntry?.is_public ?? false,
         category: draft.category,
         subcategory: draft.subcategory || null,
         summary: draft.summary || null,
@@ -275,11 +291,15 @@ const Data = {
         faceplate_color: draft.fp.color,
         faceplate_font: draft.fp.font,
         faceplate_image: draft.fp.image || null,
-        created_at: editId ? (State.entries.find((e) => e.id === editId)?.created_at ?? now) : now,
+        created_at: existingEntry?.created_at ?? now,
         updated_at: now,
         tags: cleanTagStrings,
         fields: cleanFields,
       };
+      if (editId && existingEntry) {
+        this.recordRevision(editId, existingEntry);
+      }
+      this.recordRevision(id, row);
       if (editId) {
         State.entries = State.entries.map((e) => (e.id === editId ? row : e));
       } else {
@@ -324,6 +344,31 @@ const Data = {
       id = data.id;
     }
 
+    // Best-effort save of optional `slug` / `is_public` columns added in
+    // supabase-schema-06-sharing-and-analytics.sql so older databases that
+    // haven't run migration 06 yet continue to save entries cleanly.
+    const sharePatch = { slug: entrySlug };
+    if (typeof draft.is_public === 'boolean') sharePatch.is_public = draft.is_public;
+    await State.sb.from('entries').update(sharePatch).eq('id', id).then(() => {}, () => {});
+
+    // Record the previous state in the local revision history ring buffer
+    // before overwriting it, so the user can always view or restore earlier
+    // versions of an entry (#6 Revision History).
+    if (editId) {
+      const prevEntry = State.entries.find((e) => e.id === editId);
+      if (prevEntry) {
+        this.recordRevision(editId, prevEntry);
+      }
+    }
+    this.recordRevision(id, {
+      title: draft.title,
+      category: draft.category,
+      subcategory: draft.subcategory || '',
+      summary: draft.summary || '',
+      body: draft.body || '',
+      source: draft.source || '',
+    });
+
     // Replace the satellite rows wholesale — simplest correct approach at
     // this scale, and it matches what the original did.
     await Promise.all([
@@ -358,6 +403,42 @@ const Data = {
     }
     const { error } = await State.sb.from('entries').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  // Turns a plain-text mention into a real link: rewrites one text field
+  // (summary/body) of the mentioning entry and adds a link row if the two
+  // entries aren't connected yet. Deliberately narrower than save(), which
+  // replaces every field, tag and link of the entry.
+  async linkMention(sourceId, field, newText, targetId) {
+    if (field !== 'summary' && field !== 'body') throw new Error('Unsupported field');
+    const alreadyLinked = (State.links ?? []).some((l) =>
+      (l.from_entry_id === sourceId && l.to_entry_id === targetId)
+      || (l.from_entry_id === targetId && l.to_entry_id === sourceId));
+
+    if (State.demo) {
+      State.entries = State.entries.map((e) =>
+        e.id === sourceId ? { ...e, [field]: newText, updated_at: new Date().toISOString() } : e);
+      const updated = State.entries.find((e) => e.id === sourceId);
+      if (updated) this.recordRevision(sourceId, updated);
+      if (!alreadyLinked) {
+        State.links.push({
+          id: 'dlink-' + crypto.randomUUID(),
+          from_entry_id: sourceId, to_entry_id: targetId, relation: 'Referenced in notes',
+        });
+      }
+      return;
+    }
+
+    const { error } = await State.sb.from('entries').update({ [field]: newText }).eq('id', sourceId);
+    if (error) throw error;
+    const prev = State.entries.find((e) => e.id === sourceId);
+    if (prev) this.recordRevision(sourceId, { ...prev, [field]: newText });
+    if (!alreadyLinked) {
+      const { error: linkErr } = await State.sb.from('links').insert({
+        from_entry_id: sourceId, to_entry_id: targetId, relation: 'Referenced in notes',
+      });
+      if (linkErr) throw linkErr;
+    }
   },
 
   async search(query) {
@@ -403,9 +484,261 @@ const Data = {
   },
 
   async loadProfile() {
-    if (State.demo) { State.profile = null; return; }
+    if (State.demo) {
+      State.profile = State.profile ?? {
+        id: 'demo-user',
+        plan: 'free',
+        handle: 'sample',
+        display_name: 'Sample Scholar',
+        bio: 'Eight interconnected reference entries across History, Biology, Physics, and Architecture.',
+        is_public: true,
+      };
+      return;
+    }
     const { data } = await State.sb.from('profiles').select('*').maybeSingle();
     State.profile = data ?? null;
+  },
+
+  async updatePublishing({ handle, display_name, bio, is_public }) {
+    const cleanHandle = (handle ?? '').trim().toLowerCase().replace(/^@+/, '');
+    if (cleanHandle) {
+      const v = validateHandle(cleanHandle);
+      if (!v.ok) throw new Error(v.error);
+    }
+    if (State.demo) {
+      State.profile = {
+        ...(State.profile ?? { id: 'demo-user', plan: 'free' }),
+        handle: cleanHandle || null,
+        display_name: (display_name ?? '').trim() || null,
+        bio: (bio ?? '').trim() || null,
+        is_public: !!is_public,
+      };
+      return State.profile;
+    }
+    const { data, error } = await State.sb.rpc('update_own_publishing', {
+      new_handle: cleanHandle || null,
+      new_display_name: (display_name ?? '').trim() || null,
+      new_bio: (bio ?? '').trim() || null,
+      new_is_public: !!is_public,
+    });
+    if (error) throw error;
+    State.profile = data ?? State.profile;
+    return State.profile;
+  },
+
+  async setEntryPublic(entryId, isPublic) {
+    const entry = State.entries.find((e) => e.id === entryId);
+    const slug = entry ? (entry.slug || slugify(entry.title)) : null;
+    if (State.demo) {
+      State.entries = State.entries.map((e) =>
+        e.id === entryId ? { ...e, is_public: !!isPublic, slug } : e
+      );
+      return { is_public: !!isPublic, slug };
+    }
+    const { error } = await State.sb
+      .from('entries')
+      .update({ is_public: !!isPublic, slug })
+      .eq('id', entryId);
+    if (error) throw error;
+    State.entries = State.entries.map((e) =>
+      e.id === entryId ? { ...e, is_public: !!isPublic, slug } : e
+    );
+    return { is_public: !!isPublic, slug };
+  },
+
+  async loadPublicView(route) {
+    // Built-in `@sample` handle or `sample-*` entry IDs resolve directly from
+    // `cloneSampleCompendium()` (plus any in-memory edits in Sample Mode) so
+    // public sharing links can be previewed and verified with zero network.
+    const isSampleHandle = route.handle === 'sample'
+      || (State.demo && route.handle && route.handle === State.profile?.handle);
+    const isSampleEntryId = route.entryId?.startsWith('sample-')
+      || (State.demo && State.entries.some((e) => e.id === route.entryId));
+
+    if (isSampleHandle || isSampleEntryId) {
+      const sample = State.demo && State.entries.length
+        ? { entries: State.entries, links: State.links }
+        : cloneSampleCompendium();
+      const entriesWithSlugs = sample.entries.map((e) => ({
+        ...e,
+        slug: e.slug || slugify(e.title),
+        is_public: e.is_public ?? true,
+      }));
+      const profile = State.demo && State.profile
+        ? State.profile
+        : {
+          handle: 'sample',
+          display_name: 'Synopsical Sample Compendium',
+          bio: 'An illustrated, cross-referenced specimen compendium across History, Biology, Physics, and Architecture.',
+          is_public: true,
+        };
+      let targetEntry = null;
+      if (route.mode === 'handle-entry') {
+        targetEntry = entriesWithSlugs.find(
+          (e) => e.slug === route.entrySlug || e.id === route.entrySlug
+        ) ?? null;
+      } else if (route.mode === 'entry-id') {
+        targetEntry = entriesWithSlugs.find((e) => e.id === route.entryId) ?? null;
+      }
+      return {
+        profile,
+        entries: entriesWithSlugs,
+        links: sample.links ?? [],
+        targetEntry,
+      };
+    }
+
+    if (!State.sb) return null;
+
+    if (route.mode === 'entry-id') {
+      const { data: entry, error } = await State.sb
+        .from('entries')
+        .select('*')
+        .eq('id', route.entryId)
+        .maybeSingle();
+      if (error || !entry) return null;
+      const [{ data: fields }, { data: tags }, { data: profile }] = await Promise.all([
+        State.sb.from('entry_fields').select('*').eq('entry_id', entry.id).order('sort_order'),
+        State.sb.from('tags').select('*').eq('entry_id', entry.id),
+        State.sb.from('profiles').select('handle, display_name, bio, is_public').eq('id', entry.owner_id).maybeSingle(),
+      ]);
+      const enriched = {
+        ...entry,
+        slug: entry.slug || slugify(entry.title),
+        fields: fields ?? [],
+        tags: (tags ?? []).map((t) => t.tag),
+      };
+      return {
+        profile: profile ?? { handle: null, display_name: 'Shared Entry', is_public: false },
+        entries: [enriched],
+        links: [],
+        targetEntry: enriched,
+      };
+    }
+
+    // Handle-based lookup (`#/@handle` or `#/@handle/slug`)
+    const { data: profile } = await State.sb
+      .from('profiles')
+      .select('id, handle, display_name, bio, is_public')
+      .ilike('handle', route.handle)
+      .maybeSingle();
+    if (!profile) return null;
+
+    const { data: rawEntries } = await State.sb
+      .from('entries')
+      .select('*')
+      .eq('owner_id', profile.id)
+      .order('updated_at', { ascending: false });
+    const entriesList = (rawEntries ?? []).map((e) => ({
+      ...e,
+      slug: e.slug || slugify(e.title),
+    }));
+    const entryIds = entriesList.map((e) => e.id);
+    let fields = [], tags = [], links = [];
+    if (entryIds.length) {
+      const [fRes, tRes, lRes] = await Promise.all([
+        State.sb.from('entry_fields').select('*').in('entry_id', entryIds).order('sort_order'),
+        State.sb.from('tags').select('*').in('entry_id', entryIds),
+        State.sb.from('links').select('*').in('from_entry_id', entryIds),
+      ]);
+      fields = fRes.data ?? [];
+      tags = tRes.data ?? [];
+      links = lRes.data ?? [];
+    }
+    const fieldsBy = new Map();
+    for (const f of fields) {
+      if (!fieldsBy.has(f.entry_id)) fieldsBy.set(f.entry_id, []);
+      fieldsBy.get(f.entry_id).push(f);
+    }
+    const tagsBy = new Map();
+    for (const t of tags) {
+      if (!tagsBy.has(t.entry_id)) tagsBy.set(t.entry_id, []);
+      tagsBy.get(t.entry_id).push(t.tag);
+    }
+    const enrichedEntries = entriesList.map((e) => ({
+      ...e,
+      fields: fieldsBy.get(e.id) ?? [],
+      tags: (tagsBy.get(e.id) ?? []).sort(),
+    }));
+    const targetEntry = route.mode === 'handle-entry'
+      ? enrichedEntries.find((e) => e.slug === route.entrySlug || e.id === route.entrySlug) ?? null
+      : null;
+
+    return {
+      profile,
+      entries: enrichedEntries,
+      links,
+      targetEntry,
+    };
+  },
+
+  trackEvent(eventName, meta = {}) {
+    const normalized = normalizeAnalyticsEvent(eventName, meta);
+    if (!normalized) return;
+    try {
+      const key = 'synopsical_funnel_events';
+      const buf = JSON.parse(sessionStorage.getItem(key) || '[]');
+      buf.push({ ...normalized, ts: new Date().toISOString() });
+      sessionStorage.setItem(key, JSON.stringify(buf.slice(-50)));
+    } catch { /* ignore storage restrictions */ }
+    try {
+      if (typeof State.sb?.rpc === 'function' && !State.demo) {
+        Promise.resolve(
+          State.sb.rpc('log_analytics_event', {
+            p_event: normalized.event,
+            p_meta: normalized.meta,
+          })
+        ).catch(() => {});
+      }
+    } catch { /* non-fatal */ }
+  },
+
+  getRevisions(entryId) {
+    if (!entryId) return [];
+    try {
+      const store = JSON.parse(localStorage.getItem('synopsical_revisions_v1') || '{}');
+      return Array.isArray(store[entryId]) ? store[entryId] : [];
+    } catch {
+      return [];
+    }
+  },
+
+  recordRevision(entryId, snapshot) {
+    if (!entryId || !snapshot) return [];
+    try {
+      const key = 'synopsical_revisions_v1';
+      const store = JSON.parse(localStorage.getItem(key) || '{}');
+      const next = appendRevisionSnapshot(store[entryId] ?? [], snapshot);
+      store[entryId] = next;
+      localStorage.setItem(key, JSON.stringify(store));
+      return next;
+    } catch {
+      return [];
+    }
+  },
+
+  async restoreRevision(entryId, rev) {
+    const current = State.entries.find((e) => e.id === entryId);
+    if (!current || !rev) throw new Error('Revision not found');
+    this.recordRevision(entryId, current);
+    const patch = {
+      title: rev.title || current.title,
+      category: rev.category || current.category,
+      subcategory: rev.subcategory || null,
+      summary: rev.summary || null,
+      body: rev.body || null,
+      source: rev.source || null,
+    };
+    if (State.demo) {
+      State.entries = State.entries.map((e) =>
+        e.id === entryId ? { ...e, ...patch, updated_at: new Date().toISOString() } : e
+      );
+      this.recordRevision(entryId, { ...current, ...patch });
+      return;
+    }
+    const { error } = await State.sb.from('entries').update(patch).eq('id', entryId);
+    if (error) throw error;
+    this.recordRevision(entryId, { ...current, ...patch });
   },
 
   async uploadFaceplate(file) {
@@ -679,18 +1012,28 @@ function setSidebarOpen(open) {
 function go(view) {
   setSidebarOpen(false);
   State.view = view;
-  const hash = view.name === 'detail' ? `#/entry/${view.id}`
-    : view.name === 'edit' ? `#/edit/${view.id}`
-    : view.name === 'new' ? '#/new'
-    : view.name === 'import' ? '#/import'
-    : view.name === 'settings' ? '#/settings'
-    : view.name === 'graph' ? '#/graph'
-    : view.name === 'category' ? `#/category/${encodeURIComponent(view.category)}`
-    : view.name === 'tag' ? `#/tag/${encodeURIComponent(view.tag)}`
-    : view.name === 'recent' ? '#/recent'
-    : view.name === 'search' ? `#/search?q=${encodeURIComponent(view.query)}`
-    : State.demo ? '#/sample'
-    : '#/';
+  let hash;
+  if (view.name === 'public') {
+    const built = buildPublicShareUrl(window.location.origin, {
+      handle: view.handle,
+      entrySlug: view.entrySlug,
+      entryId: view.entryId,
+    });
+    hash = built.hash;
+  } else {
+    hash = view.name === 'detail' ? `#/entry/${view.id}`
+      : view.name === 'edit' ? `#/edit/${view.id}`
+      : view.name === 'new' ? '#/new'
+      : view.name === 'import' ? '#/import'
+      : view.name === 'settings' ? '#/settings'
+      : view.name === 'graph' ? '#/graph'
+      : view.name === 'category' ? `#/category/${encodeURIComponent(view.category)}`
+      : view.name === 'tag' ? `#/tag/${encodeURIComponent(view.tag)}`
+      : view.name === 'recent' ? '#/recent'
+      : view.name === 'search' ? `#/search?q=${encodeURIComponent(view.query)}`
+      : State.demo ? '#/sample'
+      : '#/';
+  }
   if (window.location.hash !== hash) {
     window.location.hash = hash;
   } else {
@@ -699,6 +1042,8 @@ function go(view) {
 }
 
 function readHash() {
+  const pub = parsePublicHash(window.location.hash);
+  if (pub) return pub;
   const raw = window.location.hash.replace(/^#\/?/, '');
   const [path, qs] = raw.split('?');
   const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
@@ -888,6 +1233,42 @@ function viewList(title, subtitle, entries, emptyText) {
     }
     panel.append(emptyBox);
   } else {
+    // #5 Resurfacing: on the main "All entries" view, surface 1–2 "On this day"
+    // or daily rediscovery entries plus a "Random entry" button.
+    if (State.view.name === 'list' && entries.length >= 3) {
+      const resurfaced = selectResurfacedEntries(entries, new Date(), 2);
+      if (resurfaced.length) {
+        const spotGrid = el('div', { class: 'resurface-grid' });
+        for (const { entry: rEntry, reason } of resurfaced) {
+          spotGrid.append(el('button', {
+            class: 'linked-entry resurface-card',
+            type: 'button',
+            onClick: () => go({ name: 'detail', id: rEntry.id }),
+          }, [
+            faceplate(rEntry),
+            el('div', { class: 'linked-entry-info' }, [
+              el('div', { class: 'linked-entry-title', text: rEntry.title }),
+              el('div', { class: 'linked-entry-rel', text: reason }),
+            ]),
+            rEntry.category ? el('span', { class: 'pill', text: rEntry.category }) : null,
+          ]));
+        }
+        panel.append(el('div', { class: 'resurface-box' }, [
+          el('div', { class: 'resurface-head' }, [
+            el('span', { class: 'section-label', style: { margin: 0, border: 0, padding: 0 }, text: 'Rediscover from your compendium' }),
+            el('button', {
+              class: 'linkish',
+              type: 'button',
+              onClick: () => {
+                const pick = pickRandomEntry(entries);
+                if (pick) go({ name: 'detail', id: pick.id });
+              },
+            }, 'Random entry →'),
+          ]),
+          spotGrid,
+        ]));
+      }
+    }
     for (const e of entries) panel.append(entryCard(e));
   }
   return panel;
@@ -927,11 +1308,105 @@ async function viewDetail(id) {
     entry.category ? categoryStamp(entry.category) : null,
   ]));
 
+  const isEntryShared = !!(entry.is_public || State.profile?.is_public);
+  const shareUrlObj = buildPublicShareUrl(window.location.origin, {
+    handle: State.profile?.handle || (State.demo ? 'sample' : ''),
+    entrySlug: (State.profile?.handle || State.demo) ? (entry.slug || slugify(entry.title)) : '',
+    entryId: entry.id,
+  });
+
+  const shareDrawer = el('div', { class: 'share-drawer', hidden: !isEntryShared });
+  const paintShareDrawer = () => {
+    clear(shareDrawer);
+    const activePublic = !!(entry.is_public || State.profile?.is_public);
+    const currentUrl = buildPublicShareUrl(window.location.origin, {
+      handle: State.profile?.handle || (State.demo ? 'sample' : ''),
+      entrySlug: (State.profile?.handle || State.demo) ? (entry.slug || slugify(entry.title)) : '',
+      entryId: entry.id,
+    });
+    if (!activePublic) {
+      shareDrawer.hidden = true;
+      return;
+    }
+    shareDrawer.hidden = false;
+    const urlInput = el('input', {
+      class: 'input share-url-input',
+      type: 'text',
+      value: currentUrl.url,
+      readonly: true,
+      'aria-label': 'Public share URL',
+    });
+    urlInput.addEventListener('click', () => urlInput.select());
+    shareDrawer.append(
+      el('div', { class: 'share-drawer-head' }, [
+        el('span', { class: 'pill share-badge', text: 'Public link active' }),
+        el('span', {
+          class: 'hint',
+          style: { marginTop: 0 },
+          text: State.profile?.handle
+            ? `Published under @${State.profile.handle}`
+            : 'Anyone with this link can read this entry (set a custom @handle in Appearance)',
+        }),
+      ]),
+      el('div', { class: 'share-drawer-row' }, [
+        urlInput,
+        el('button', {
+          class: 'btn btn-sm btn-primary',
+          type: 'button',
+          onClick: async () => {
+            try {
+              await navigator.clipboard.writeText(currentUrl.url);
+              toast('Public link copied to clipboard');
+            } catch {
+              urlInput.select();
+              toast('Select and copy the public link');
+            }
+          },
+        }, 'Copy link'),
+        el('button', {
+          class: 'btn btn-sm',
+          type: 'button',
+          onClick: () => {
+            window.location.hash = currentUrl.hash;
+          },
+        }, 'Preview public page →'),
+      ])
+    );
+  };
+  paintShareDrawer();
+
+  const shareBtn = el('button', {
+    class: 'btn',
+    type: 'button',
+  }, isEntryShared ? 'Shared · Copy link' : 'Share');
+  shareBtn.addEventListener('click', async () => {
+    try {
+      if (!entry.is_public && !State.profile?.is_public) {
+        const res = await Data.setEntryPublic(id, true);
+        entry.is_public = res.is_public;
+        entry.slug = res.slug;
+        Data.trackEvent('share_enable', { category: entry.category || '' });
+        shareBtn.textContent = 'Shared · Copy link';
+      }
+      paintShareDrawer();
+      const latestUrl = buildPublicShareUrl(window.location.origin, {
+        handle: State.profile?.handle || (State.demo ? 'sample' : ''),
+        entrySlug: (State.profile?.handle || State.demo) ? (entry.slug || slugify(entry.title)) : '',
+        entryId: entry.id,
+      });
+      await navigator.clipboard.writeText(latestUrl.url).catch(() => {});
+      toast('Entry published — shareable link copied');
+    } catch (err) {
+      toast(err.message || 'Could not update sharing settings', true);
+    }
+  });
+
   panel.append(el('div', { class: 'actions' }, [
     el('button', {
       class: 'btn btn-primary', type: 'button',
       onClick: () => go({ name: 'edit', id }),
     }, 'Edit'),
+    shareBtn,
     el('button', {
       class: 'btn', type: 'button',
       onClick: () => window.print(),
@@ -955,7 +1430,7 @@ async function viewDetail(id) {
         }
       },
     }, 'Delete'),
-  ]));
+  ]), shareDrawer);
 
   const section = (label, content) =>
     el('div', { class: 'section' }, [el('div', { class: 'section-label', text: label }), content]);
@@ -1015,6 +1490,77 @@ async function viewDetail(id) {
     if (wrap.childElementCount) panel.append(section(`Linked entries (${wrap.childElementCount})`, wrap));
   }
 
+  // Backlinks: entries whose notes reference this one with [[Title]] but
+  // have no link row (typically written before this entry existed).
+  const snippetEl = (s) => el('div', { class: 'mention-snippet' }, [
+    s.before, el('mark', { text: s.match }), s.after,
+  ]);
+  const wikiRefs = findWikiReferences(State.entries, entry)
+    .filter((r) => !linkedIds.has(r.entry.id));
+  if (wikiRefs.length) {
+    const wrap = el('div');
+    for (const { entry: other, snippet } of wikiRefs) {
+      linkedIds.add(other.id);
+      wrap.append(el('button', {
+        class: 'linked-entry', type: 'button',
+        onClick: () => go({ name: 'detail', id: other.id }),
+      }, [
+        faceplate(other),
+        el('div', { class: 'linked-entry-info' }, [
+          el('div', { class: 'linked-entry-title', text: other.title }),
+          snippetEl(snippet),
+        ]),
+        other.category ? el('span', { class: 'pill', text: other.category }) : null,
+      ]));
+    }
+    panel.append(section(`Mentioned in (${wikiRefs.length})`, wrap));
+  }
+
+  // Unlinked mentions: other entries that name this one in plain text.
+  // "Link" wraps the first mention in [[ ]] and connects the two entries.
+  const unlinked = findUnlinkedMentions(State.entries, entry, linkedIds);
+  if (unlinked.length) {
+    const wrap = el('div');
+    for (const m of unlinked.slice(0, 10)) {
+      const other = m.entry;
+      const linkBtn = el('button', { class: 'btn btn-sm', type: 'button' }, 'Link');
+      linkBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        linkBtn.disabled = true;
+        linkBtn.textContent = 'Linking…';
+        try {
+          const newText = linkFirstMention(other[m.field] ?? '', entry.title);
+          await Data.linkMention(other.id, m.field, newText, id);
+          await Data.loadAll();
+          toast(`Linked from “${other.title}”`);
+          await render();
+          Data.requestEmbedding(other.id).catch(() => {});
+        } catch (err) {
+          toast(err.message || 'Could not link', true);
+          linkBtn.disabled = false;
+          linkBtn.textContent = 'Link';
+        }
+      });
+      wrap.append(el('div', { class: 'linked-entry mention-row' }, [
+        el('button', {
+          class: 'mention-open', type: 'button',
+          onClick: () => go({ name: 'detail', id: other.id }),
+        }, [
+          faceplate(other),
+          el('div', { class: 'linked-entry-info' }, [
+            el('div', { class: 'linked-entry-title', text: other.title }),
+            snippetEl(m.snippet),
+          ]),
+        ]),
+        linkBtn,
+      ]));
+    }
+    panel.append(section(`Unlinked mentions (${unlinked.length})`, el('div', {}, [
+      el('div', { class: 'hint mention-hint', text: `These entries name “${entry.title}” without linking to it.` }),
+      wrap,
+    ])));
+  }
+
   // Related entries: combines free, explainable tag/category overlap with
   // semantic embedding similarity (when available) so every entry with
   // neighbors in the compendium surfaces useful connections immediately.
@@ -1068,10 +1614,135 @@ async function viewDetail(id) {
     }
   } catch { /* non-fatal */ }
 
+  // #6 Revision history: shows saved snapshots for this entry and lets the
+  // user restore any previous version with one click.
+  const revisions = Data.getRevisions(id);
+  if (revisions.length > 1) {
+    const revWrap = el('div');
+    revisions.slice(1, 8).forEach((rev) => {
+      const stamp = new Date(rev.savedAt).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+      const preview = (rev.body || rev.summary || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+      const restoreBtn = el('button', {
+        class: 'btn btn-sm',
+        type: 'button',
+        onClick: async () => {
+          const ok = await confirmDialog(
+            'Restore this revision?',
+            `Replace the current notes of “${entry.title}” with the version saved on ${stamp}? (Your current version will also be kept in revision history.)`,
+            'Restore revision'
+          );
+          if (!ok) return;
+          try {
+            await Data.restoreRevision(id, rev);
+            await Data.loadAll();
+            toast('Revision restored');
+            await render();
+          } catch (err) {
+            toast(err.message || 'Could not restore revision', true);
+          }
+        },
+      }, 'Restore');
+      revWrap.append(el('div', { class: 'linked-entry mention-row revision-row' }, [
+        el('div', { class: 'linked-entry-info' }, [
+          el('div', { class: 'linked-entry-title', text: `${rev.title || entry.title} · ${stamp}` }),
+          preview ? el('div', { class: 'mention-snippet', text: preview + (preview.length >= 90 ? '…' : '') }) : null,
+        ]),
+        restoreBtn,
+      ]));
+    });
+    panel.append(section(`Revision history (${revisions.length - 1})`, revWrap));
+  }
+
   return panel;
 }
 
 /* ── Editor ────────────────────────────────────────────────────── */
+
+// Typing "[[" in a textarea opens a list of matching entry titles.
+// ↑/↓ move, Enter or Tab inserts, Esc closes. Picking "New entry" just
+// writes the [[Title]]; it renders as an unresolved link you can click
+// later to create that entry.
+function attachWikiAutocomplete(textarea, excludeId) {
+  const listId = 'wiki-ac-' + Math.random().toString(36).slice(2, 8);
+  const box = el('div', { class: 'wiki-ac', role: 'listbox', id: listId, hidden: true });
+  textarea.setAttribute('aria-autocomplete', 'list');
+  textarea.setAttribute('aria-controls', listId);
+  textarea.parentNode.classList.add('wiki-ac-host');
+  textarea.insertAdjacentElement('afterend', box);
+
+  let items = [];
+  let active = 0;
+  let ctx = null;
+
+  const close = () => {
+    box.hidden = true;
+    items = [];
+    ctx = null;
+    textarea.removeAttribute('aria-activedescendant');
+  };
+
+  const choose = (i) => {
+    const item = items[i];
+    if (!item || !ctx) return;
+    const { text, caret } = applyWikiCompletion(
+      textarea.value, ctx.start, textarea.selectionStart, item.title
+    );
+    textarea.value = text;
+    textarea.setSelectionRange(caret, caret);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    close();
+    textarea.focus();
+  };
+
+  const paint = () => {
+    clear(box);
+    items.forEach((item, i) => {
+      const opt = el('div', {
+        class: 'wiki-ac-item' + (i === active ? ' active' : '') + (item.isNew ? ' is-new' : ''),
+        role: 'option', id: `${listId}-${i}`,
+        'aria-selected': i === active ? 'true' : 'false',
+        onMousedown: (ev) => { ev.preventDefault(); choose(i); },
+      }, item.isNew
+        ? [el('span', { class: 'wiki-ac-new', text: 'New entry' }), el('span', { text: `“${item.title}”` })]
+        : [el('span', { class: 'wiki-ac-title', text: item.title }),
+          item.category ? el('span', { class: 'wiki-ac-cat', text: item.category }) : null]);
+      box.append(opt);
+    });
+    textarea.setAttribute('aria-activedescendant', `${listId}-${active}`);
+    box.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const update = () => {
+    ctx = wikiQueryAt(textarea.value, textarea.selectionStart);
+    if (!ctx || textarea.selectionStart !== textarea.selectionEnd) { close(); return; }
+    const q = ctx.query.trim();
+    items = rankTitleMatches(State.entries, q, { excludeId, limit: 7 })
+      .map((e) => ({ title: e.title, category: e.category }));
+    if (q && !items.some((it) => it.title.trim().toLowerCase() === q.toLowerCase())) {
+      items.push({ title: q, isNew: true });
+    }
+    if (!items.length) { close(); return; }
+    active = Math.min(active, items.length - 1);
+    box.hidden = false;
+    paint();
+  };
+
+  textarea.addEventListener('input', () => { active = 0; update(); });
+  textarea.addEventListener('click', update);
+  textarea.addEventListener('keyup', (ev) => {
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' || ev.key === 'Home' || ev.key === 'End') update();
+  });
+  textarea.addEventListener('keydown', (ev) => {
+    if (box.hidden || !items.length) return;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
+    else if (ev.key === 'Enter' || ev.key === 'Tab') { ev.preventDefault(); choose(active); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(); }
+  });
+  textarea.addEventListener('blur', () => setTimeout(close, 120));
+}
 
 async function viewForm(editId) {
   const existing = editId ? State.entries.find((e) => e.id === editId) : null;
@@ -1098,11 +1769,11 @@ async function viewForm(editId) {
     State.form = {
       forId: editId ?? 'new',
       title: existing?.title ?? State.prefillNew?.title ?? '',
-      category: existing?.category ?? '',
+      category: existing?.category ?? State.prefillNew?.category ?? '',
       subcategory: existing?.subcategory ?? '',
-      summary: existing?.summary ?? '',
-      body: existing?.body ?? '',
-      source: existing?.source ?? '',
+      summary: existing?.summary ?? State.prefillNew?.summary ?? '',
+      body: existing?.body ?? State.prefillNew?.body ?? '',
+      source: existing?.source ?? State.prefillNew?.source ?? '',
       fp: {
         type: existing?.faceplate_type ?? 'text',
         text: existing?.faceplate_text ?? '',
@@ -1164,17 +1835,20 @@ async function viewForm(editId) {
   ]));
 
   panel.append(faceplateBuilder(F));
-  panel.append(textField('Summary', 'summary', {
+  const summaryField = textField('Summary', 'summary', {
     multiline: true, style: { minHeight: '76px' },
     placeholder: 'A sentence or two, shown in lists.',
     onBlur: () => suggestions?.refresh(),
-  }));
-  panel.append(textField('Notes', 'body', {
+  });
+  const bodyField = textField('Notes', 'body', {
     multiline: true, style: { minHeight: '220px' },
     placeholder: 'Everything you want to keep about this topic. Supports ## subheadings, - bullet lists, **bold**, *italic*, and [[Entry Title]] inline links.',
-    hint: 'Tip: Link to another entry right inside a sentence by typing [[Entry Title]].',
+    hint: 'Tip: type [[ to link another entry right inside a sentence.',
     onBlur: () => suggestions?.refresh(),
-  }));
+  });
+  attachWikiAutocomplete(summaryField.querySelector('textarea'), editId);
+  attachWikiAutocomplete(bodyField.querySelector('textarea'), editId);
+  panel.append(summaryField, bodyField);
 
   /* Custom fields */
   const fieldsWrap = el('div', { class: 'fields-list' });
@@ -1242,6 +1916,18 @@ async function viewForm(editId) {
 
   panel.append(textField('Source', 'source', { placeholder: 'URL, book, paper or reference' }));
 
+  const publicCheck = el('input', {
+    type: 'checkbox',
+    checked: !!(F.is_public ?? existing?.is_public),
+  });
+  publicCheck.addEventListener('change', () => { F.is_public = publicCheck.checked; });
+  panel.append(el('div', { class: 'field' }, [
+    el('label', { class: 'auth-legal-check', style: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' } }, [
+      publicCheck,
+      el('span', { text: 'Publish this entry at a shareable read-only link' }),
+    ]),
+  ]));
+
   const saveBtn = el('button', { class: 'btn btn-primary', type: 'button' }, existing ? 'Save changes' : 'Create entry');
   saveBtn.addEventListener('click', async () => {
     if (!F.title.trim()) { toast('A title is required', true); return; }
@@ -1262,11 +1948,17 @@ async function viewForm(editId) {
       }
 
       const id = await Data.save(
-        { ...F, title: F.title.trim(), category: F.category.trim() },
+        { ...F, title: F.title.trim(), category: F.category.trim(), is_public: publicCheck.checked },
         F.fields, F.tags, F.links, editId
       );
       State.form = null;
       await Data.loadAll();
+      if (!existing) {
+        Data.trackEvent('entry_create', { category: F.category.trim(), count: State.entries.length });
+        if (State.entries.length === 10) {
+          Data.trackEvent('entry_milestone_10', { count: 10 });
+        }
+      }
       toast(existing ? 'Changes saved' : 'Entry created');
       go({ name: 'detail', id });
       Data.requestEmbedding(id).catch(() => {});
@@ -1936,6 +2628,10 @@ function viewSettings() {
     el('div', { class: 'section-label', text: 'Fine tuning' }), colours,
   ]));
 
+  panel.append(publishingSettingsSection());
+  panel.append(quickCaptureSettingsSection());
+  panel.append(billingSettingsSection());
+
   if (!State.demo) {
     panel.append(el('div', { class: 'section' }, [
       el('div', { class: 'section-label', text: 'Account' }),
@@ -1962,6 +2658,360 @@ function viewSettings() {
         },
       }, 'Delete my account'),
     ]));
+  }
+
+  return panel;
+}
+
+function publishingSettingsSection() {
+  const wrap = el('div', { class: 'section' });
+  wrap.append(el('div', { class: 'section-label', text: 'Public sharing' }));
+
+  const prof = State.profile ?? {
+    handle: State.demo ? 'sample' : '',
+    display_name: State.demo ? 'Sample Scholar' : '',
+    bio: '',
+    is_public: State.demo,
+  };
+
+  const handleInput = el('input', {
+    class: 'input',
+    type: 'text',
+    value: prof.handle ?? '',
+    placeholder: 'e.g. byzantine-notes',
+    'aria-label': 'Public handle',
+  });
+  const nameInput = el('input', {
+    class: 'input',
+    type: 'text',
+    value: prof.display_name ?? '',
+    placeholder: 'e.g. Dr. Elena Rostova',
+    'aria-label': 'Public display name',
+  });
+  const bioInput = el('input', {
+    class: 'input',
+    type: 'text',
+    value: prof.bio ?? '',
+    placeholder: 'Optional one-line description shown on your public compendium page',
+    'aria-label': 'Public compendium bio',
+  });
+  const publicToggle = el('input', {
+    type: 'checkbox',
+    checked: !!prof.is_public,
+  });
+
+  const previewUrlBox = el('div', { class: 'hint', style: { marginTop: '6px' } });
+  const updatePreviewText = () => {
+    const h = handleInput.value.trim().toLowerCase().replace(/^@+/, '');
+    if (h) {
+      const built = buildPublicShareUrl(window.location.origin, { handle: h });
+      previewUrlBox.textContent = `Public URL: ${built.url}`;
+    } else {
+      previewUrlBox.textContent = 'Choose a handle to get a shareable URL like synopsical.com/#/@your-handle';
+    }
+  };
+  handleInput.addEventListener('input', updatePreviewText);
+  updatePreviewText();
+
+  const savePubBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button' }, 'Save sharing settings');
+  const openPubBtn = el('button', {
+    class: 'btn btn-sm',
+    type: 'button',
+    hidden: !(prof.handle || State.demo),
+    onClick: () => {
+      const h = handleInput.value.trim().toLowerCase().replace(/^@+/, '') || (State.demo ? 'sample' : '');
+      if (h) go({ name: 'public', mode: 'compendium', handle: h, entrySlug: null, entryId: null });
+    },
+  }, 'Preview public compendium →');
+
+  savePubBtn.addEventListener('click', async () => {
+    savePubBtn.disabled = true;
+    savePubBtn.textContent = 'Saving…';
+    try {
+      const updated = await Data.updatePublishing({
+        handle: handleInput.value,
+        display_name: nameInput.value,
+        bio: bioInput.value,
+        is_public: publicToggle.checked,
+      });
+      if (updated?.is_public || updated?.handle) {
+        Data.trackEvent('share_enable', { mode: updated.is_public ? 'compendium' : 'handle' });
+      }
+      openPubBtn.hidden = !(updated?.handle || State.demo);
+      toast('Public sharing settings saved');
+    } catch (err) {
+      toast(err.message || 'Could not save sharing settings', true);
+    } finally {
+      savePubBtn.disabled = false;
+      savePubBtn.textContent = 'Save sharing settings';
+    }
+  });
+
+  wrap.append(
+    el('div', { class: 'form-grid' }, [
+      el('div', { class: 'field' }, [
+        el('label', { class: 'field-label', text: 'Public @handle' }),
+        handleInput,
+        previewUrlBox,
+      ]),
+      el('div', { class: 'field' }, [
+        el('label', { class: 'field-label', text: 'Curator / Compendium title' }),
+        nameInput,
+      ]),
+    ]),
+    el('div', { class: 'field' }, [
+      el('label', { class: 'field-label', text: 'Compendium subtitle / bio' }),
+      bioInput,
+    ]),
+    el('label', { class: 'auth-legal-check', style: { marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' } }, [
+      publicToggle,
+      el('span', { text: 'Publish entire compendium as a read-only reference at this @handle (otherwise only entries you individually Share are public).' }),
+    ]),
+    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [savePubBtn, openPubBtn])
+  );
+  return wrap;
+}
+
+function billingSettingsSection() {
+  const wrap = el('div', { class: 'section' });
+  wrap.append(el('div', { class: 'section-label', text: 'Plan & Plus membership' }));
+
+  const paid = isPaidPlan();
+  const cfg = window.SYNOPSICAL_CONFIG ?? {};
+  const checkoutUrl = buildStripeCheckoutUrl(cfg.STRIPE_PLUS_PAYMENT_LINK, {
+    userId: State.user?.id || '',
+    email: State.user?.email || '',
+  });
+  const portalUrl = (cfg.STRIPE_CUSTOMER_PORTAL_URL || '').trim();
+
+  const statusRow = el('div', { class: 'field-row', style: { alignItems: 'center', justifyContent: 'space-between' } }, [
+    el('div', {}, [
+      el('div', {
+        style: { fontWeight: '600', color: 'var(--text0)' },
+        text: paid ? 'Synopsical Plus (Active)' : 'Synopsical Free',
+      }),
+      el('div', {
+        class: 'hint',
+        text: paid
+          ? 'Thank you for supporting independent software. All Plus capabilities are unlocked.'
+          : 'Core personal compendium is free forever. Upgrade to Plus ($5/mo) for custom @handle publishing, AI Archivist synthesis, and book export.',
+      }),
+    ]),
+    el('span', { class: 'pill', text: paid ? 'PLUS' : 'FREE' }),
+  ]);
+  wrap.append(statusRow);
+
+  const btnRow = el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' } });
+  if (paid && portalUrl) {
+    btnRow.append(el('a', {
+      class: 'btn btn-sm',
+      href: portalUrl,
+      target: '_blank',
+      rel: 'noopener',
+    }, 'Manage billing in Stripe →'));
+  } else if (!paid) {
+    btnRow.append(el('button', {
+      class: 'btn btn-sm btn-primary',
+      type: 'button',
+      onClick: () => {
+        Data.trackEvent('plus_checkout_click', { source: State.demo ? 'demo-settings' : 'settings' });
+        if (checkoutUrl) {
+          window.open(checkoutUrl, '_blank', 'noopener');
+        } else {
+          window.location.href = 'pricing.html';
+        }
+      },
+    }, checkoutUrl ? 'Upgrade to Plus ($5/mo) →' : 'View Plus plan & pricing →'));
+  }
+  wrap.append(btnRow);
+  return wrap;
+}
+
+function quickCaptureSettingsSection() {
+  const wrap = el('div', { class: 'section' });
+  wrap.append(el('div', { class: 'section-label', text: 'Quick capture & offline app' }));
+  wrap.append(el('p', { class: 'hint', style: { marginBottom: '12px' } },
+    'Drag the bookmarklet below to your browser bookmarks bar. Highlighting any passage on the web and clicking "Clip to Synopsical" opens a new entry pre-filled with the page title, quoted selection, and source URL.'));
+
+  const bookmarkletHref = buildBookmarkletHref(window.location.origin);
+  const bookmarkletLink = el('a', {
+    class: 'btn btn-sm btn-primary bookmarklet-pill',
+    href: bookmarkletHref,
+    onClick: (ev) => {
+      ev.preventDefault();
+      toast('Drag this button to your browser bookmarks bar to clip from any webpage');
+    },
+  }, '✦ Clip to Synopsical');
+
+  const testClipBtn = el('button', {
+    class: 'btn btn-sm',
+    type: 'button',
+    onClick: () => {
+      State.prefillNew = {
+        title: 'Clipped: On the Method of Commonplace Books',
+        category: 'Captured',
+        summary: '',
+        body: '> A commonplace book is not a diary of passing impressions, but a working index of enduring arguments and sources.',
+        source: 'https://example.org/commonplace-method',
+      };
+      State.form = null;
+      go({ name: 'new' });
+      toast('Opened quick-capture draft');
+    },
+  }, 'Try sample clip →');
+
+  wrap.append(
+    el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } }, [
+      bookmarkletLink,
+      testClipBtn,
+    ]),
+    el('div', { class: 'hint', style: { marginTop: '10px' } },
+      'Tip: You can also install Synopsical as an offline-ready desktop or mobile app via your browser’s "Install app" / "Add to Home Screen" menu.')
+  );
+  return wrap;
+}
+
+async function viewPublic(route) {
+  const panel = el('div', { class: 'panel public-reader-panel' });
+  const loaded = await Data.loadPublicView(route);
+
+  if (!loaded || (!loaded.entries.length && !loaded.targetEntry)) {
+    panel.append(el('div', { class: 'empty' }, [
+      el('div', { class: 'empty-title', text: 'Public page not found' }),
+      el('p', { text: 'This entry or compendium is private or does not exist.' }),
+      el('div', { class: 'empty-actions' }, [
+        el('button', {
+          class: 'btn btn-primary',
+          type: 'button',
+          onClick: () => (State.user || State.demo ? go({ name: 'list' }) : showHomepage()),
+        }, State.user || State.demo ? '← Back to compendium' : '← Back to Synopsical'),
+      ]),
+    ]));
+    return panel;
+  }
+
+  const { profile, entries, targetEntry } = loaded;
+  const handle = profile?.handle || route.handle || 'sample';
+  const curatorTitle = profile?.display_name || `@${handle}`;
+
+  Data.trackEvent('public_view', {
+    mode: targetEntry ? 'entry' : 'compendium',
+    count: entries.length,
+  });
+
+  // Top reader attribution bar with "Make your own compendium" growth CTA
+  const readerBanner = el('div', { class: 'public-reader-bar' }, [
+    el('div', { class: 'public-reader-meta' }, [
+      el('span', { class: 'pill', text: 'Public Edition' }),
+      el('button', {
+        class: 'linkish',
+        type: 'button',
+        onClick: () => go({ name: 'public', mode: 'compendium', handle, entrySlug: null, entryId: null }),
+      }, curatorTitle),
+      profile?.bio ? el('span', { class: 'hint', style: { marginTop: 0 }, text: `— ${profile.bio}` }) : null,
+    ]),
+    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [
+      (State.user || State.demo)
+        ? el('button', {
+          class: 'btn btn-sm',
+          type: 'button',
+          onClick: () => go({ name: 'list' }),
+        }, '← Back to editor')
+        : el('button', {
+          class: 'btn btn-sm btn-primary',
+          type: 'button',
+          onClick: () => showAuth('signup'),
+        }, 'Start your own compendium — free'),
+    ]),
+  ]);
+  panel.append(readerBanner);
+
+  if (targetEntry) {
+    if (entries.length > 1 && handle) {
+      panel.append(el('button', {
+        class: 'back-link',
+        type: 'button',
+        onClick: () => go({ name: 'public', mode: 'compendium', handle, entrySlug: null, entryId: null }),
+      }, `← All published entries in ${curatorTitle}`));
+    }
+
+    panel.append(el('div', { class: 'detail-hero' }, [
+      faceplate(targetEntry, 'lg'),
+      el('div', { style: { flex: '1', minWidth: '0' } }, [
+        el('h1', { class: 'detail-title', text: targetEntry.title }),
+        el('div', { class: 'detail-meta' }, [
+          targetEntry.subcategory ? el('span', { text: targetEntry.subcategory }) : null,
+          el('span', {
+            text: 'Published in ' + curatorTitle,
+          }),
+        ]),
+      ]),
+      targetEntry.category ? categoryStamp(targetEntry.category) : null,
+    ]));
+
+    const section = (label, content) =>
+      el('div', { class: 'section' }, [el('div', { class: 'section-label', text: label }), content]);
+
+    if (targetEntry.summary) {
+      panel.append(section('Summary', renderRichBody(targetEntry.summary, targetEntry.id, 'body-text-lead entry-summary-text')));
+    }
+    if (targetEntry.body) {
+      panel.append(section('Notes', renderRichBody(targetEntry.body, targetEntry.id, targetEntry.summary ? '' : 'body-text-lead')));
+    }
+    if ((targetEntry.fields ?? []).length) {
+      const wrap = el('div');
+      for (const f of targetEntry.fields) {
+        wrap.append(el('div', { class: 'field-row' }, [
+          el('div', { class: 'field-name', text: f.field_name ?? f.name }),
+          el('div', { class: 'field-val', text: (f.field_value ?? f.value) || '—' }),
+        ]));
+      }
+      panel.append(section('Details', wrap));
+    }
+    if ((targetEntry.tags ?? []).length) {
+      const wrap = el('div', { class: 'tags-wrap' });
+      for (const t of targetEntry.tags) {
+        wrap.append(el('span', { class: 'tag-pill', text: typeof t === 'string' ? t : t.tag }));
+      }
+      panel.append(section('Tags', wrap));
+    }
+    if (targetEntry.source) {
+      panel.append(section('Source', el('div', { class: 'body-text', style: { fontSize: '13.5px' }, text: targetEntry.source })));
+    }
+    return panel;
+  }
+
+  // Compendium index view (`#/@handle`)
+  panel.append(el('div', { class: 'page-head' }, [
+    el('h1', { class: 'page-title', text: curatorTitle }),
+    el('span', { class: 'page-sub', text: `@${handle} · ${entries.length} published ${entries.length === 1 ? 'entry' : 'entries'}` }),
+  ]));
+  if (profile?.bio) {
+    panel.append(el('p', { class: 'body-text', style: { marginBottom: '18px', color: 'var(--text2)' }, text: profile.bio }));
+  }
+
+  for (const e of entries) {
+    const slug = e.slug || slugify(e.title);
+    const card = el('button', {
+      class: 'entry-card',
+      type: 'button',
+      onClick: () => go({
+        name: 'public',
+        mode: 'handle-entry',
+        handle,
+        entrySlug: slug,
+        entryId: null,
+      }),
+    });
+    const body = el('div', { class: 'entry-card-body' }, [
+      el('div', { class: 'entry-card-top' }, [
+        el('span', { class: 'entry-card-title', text: e.title }),
+        e.category ? el('span', { class: 'pill', text: e.category }) : null,
+      ]),
+      e.summary ? el('div', { class: 'entry-card-summary', text: e.summary }) : null,
+    ]);
+    card.append(faceplate(e), body);
+    panel.append(card);
   }
 
   return panel;
@@ -2382,12 +3432,13 @@ async function exportMarkdown() {
 /* ── Render ────────────────────────────────────────────────────── */
 
 async function render() {
-  renderSidebar();
+  if (State.user || State.demo) renderSidebar();
   const host = $('view');
   const v = State.view;
   let node;
 
   switch (v.name) {
+    case 'public': node = await viewPublic(v); break;
     case 'detail': node = await viewDetail(v.id); break;
     case 'edit':   node = await viewForm(v.id); break;
     case 'new':    node = await viewForm(null); break;
@@ -2480,18 +3531,21 @@ function readAuthHash() {
 
 function showAuth(mode = 'signin') {
   exitDemo(false);
+  $('app').classList.remove('public-mode');
   const hash = authHashFor(mode);
   if (window.location.hash !== hash) window.location.hash = hash;
   else paintAuth(mode);
 }
 
 function paintAuth(mode = 'signin') {
+  $('app').classList.remove('public-mode');
   $('auth-screen').hidden = false;
   $('homepage').hidden = true;
   $('app').hidden = true;
   $('setup-screen').hidden = true;
   $('verified-screen').hidden = true;
   $('reset-screen').hidden = true;
+  if (mode === 'signup') Data.trackEvent('signup_view', { source: 'auth-screen' });
   $('auth-sub').textContent = mode === 'signin' ? 'Sign in to reach your entries.'
     : mode === 'signup' ? 'Create an account to get started.'
     : 'Enter your email and we’ll send you a reset link.';
@@ -2525,16 +3579,33 @@ function paintAuth(mode = 'signin') {
 
 function showHomepage() {
   exitDemo(false);
+  $('app').classList.remove('public-mode');
   const hash = '#/';
   if (window.location.hash !== hash && window.location.hash !== '') window.location.hash = hash;
   else paintHomepage();
 }
 function paintHomepage() {
+  $('app').classList.remove('public-mode');
   $('homepage').hidden = false;
   $('auth-screen').hidden = true;
   $('verified-screen').hidden = true;
   $('reset-screen').hidden = true;
   $('app').hidden = true;
+}
+
+async function showPublicRoute(pubRoute) {
+  $('homepage').hidden = true;
+  $('auth-screen').hidden = true;
+  $('setup-screen').hidden = true;
+  $('verified-screen').hidden = true;
+  $('reset-screen').hidden = true;
+  $('app').hidden = false;
+  if (!State.user && !State.demo) {
+    $('app').classList.add('public-mode');
+  }
+  applyTheme();
+  State.view = pubRoute;
+  await render();
 }
 
 /**
@@ -2544,9 +3615,21 @@ function paintHomepage() {
  */
 async function startDemo(initialEntryId = null) {
   State.demo = true;
+  $('app').classList.remove('public-mode');
   const { entries, links } = cloneSampleCompendium();
-  State.entries = entries;
+  State.entries = entries.map((e) => ({
+    ...e,
+    slug: e.slug || slugify(e.title),
+    is_public: true,
+  }));
   State.links = links;
+  await Data.loadProfile();
+  await Data.loadAll();
+
+  Data.trackEvent('sample_start', {
+    source: initialEntryId ? 'proof-card' : 'cta',
+    count: State.entries.length,
+  });
 
   $('homepage').hidden = true;
   $('auth-screen').hidden = true;
@@ -2558,7 +3641,9 @@ async function startDemo(initialEntryId = null) {
   $('demo-banner').hidden = false;
 
   applyTheme();
-  if (initialEntryId) {
+  if (initialEntryId === 'new') {
+    go({ name: 'new' });
+  } else if (initialEntryId) {
     go({ name: 'detail', id: initialEntryId });
   } else {
     go({ name: 'list' });
@@ -2653,6 +3738,9 @@ function wireAuth() {
       errBox.hidden = false;
       return;
     }
+    if (mode === 'signup') {
+      Data.trackEvent('signup_complete', { source: 'auth-form' });
+    }
     if (mode === 'signup' && !data.session) {
       errBox.textContent = 'Check your email for a confirmation link, then sign in.';
       errBox.hidden = false;
@@ -2708,6 +3796,7 @@ function wireAuth() {
 
 async function start(user) {
   exitDemo(false);
+  $('app').classList.remove('public-mode');
   State.user = user;
   $('homepage').hidden = true;
   $('auth-screen').hidden = true;
@@ -2741,6 +3830,15 @@ function wireChrome() {
   $('nav-all').addEventListener('click', () => go({ name: 'list' }));
   $('nav-recent').addEventListener('click', () => go({ name: 'recent' }));
   $('nav-graph').addEventListener('click', () => go({ name: 'graph' }));
+  $('nav-random').addEventListener('click', () => {
+    const excludeId = State.view.name === 'detail' ? State.view.id : null;
+    const picked = pickRandomEntry(State.entries, excludeId);
+    if (!picked) {
+      toast('Add an entry first to jump to a random note');
+      return;
+    }
+    go({ name: 'detail', id: picked.id });
+  });
   $('btn-new').addEventListener('click', () => { State.form = null; go({ name: 'new' }); });
   $('btn-import').addEventListener('click', () => go({ name: 'import' }));
   $('btn-settings').addEventListener('click', () => go({ name: 'settings' }));
@@ -2813,6 +3911,11 @@ function wireHomepage() {
 
   window.addEventListener('hashchange', () => {
     if (State.user || State.demo) return;
+    const pubRoute = parsePublicHash(window.location.hash);
+    if (pubRoute) {
+      showPublicRoute(pubRoute);
+      return;
+    }
     if (window.location.hash === '#/sample') {
       startDemo();
       return;
@@ -2824,6 +3927,10 @@ function wireHomepage() {
 }
 
 async function boot() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline SW optional */ });
+  }
+
   const cfg = window.SYNOPSICAL_CONFIG ?? {};
   if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
     $('homepage').hidden = true;
@@ -2842,11 +3949,12 @@ async function boot() {
   wireChrome();
   wireHomepage();
 
+  const capturedDraft = parseQuickCaptureParams(window.location.search);
   const confirming = isEmailConfirmationRedirect();
   const { data } = await State.sb.auth.getSession();
 
-  if (confirming || isRecovery) {
-    history.replaceState(null, '', window.location.pathname);
+  if (confirming || isRecovery || capturedDraft) {
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
   }
 
   if (confirming) {
@@ -2858,8 +3966,27 @@ async function boot() {
     return;
   }
 
+  if (capturedDraft) {
+    State.prefillNew = capturedDraft;
+    State.form = null;
+    if (data.session?.user) {
+      window.location.hash = '#/new';
+      await start(data.session.user);
+    } else {
+      await startDemo('new');
+    }
+    toast('Clipped passage ready — review and save to your compendium');
+    return;
+  }
+
   if (data.session?.user) {
     await start(data.session.user);
+    return;
+  }
+
+  const pubRoute = parsePublicHash(window.location.hash);
+  if (pubRoute) {
+    await showPublicRoute(pubRoute);
     return;
   }
 
@@ -2869,7 +3996,12 @@ async function boot() {
   }
 
   const mode = readAuthHash();
-  if (mode) paintAuth(mode);
+  if (mode) {
+    paintAuth(mode);
+    return;
+  }
+
+  Data.trackEvent('home_view', { source: 'landing' });
 }
 
 boot();
